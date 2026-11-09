@@ -1,0 +1,10 @@
+# Logs
+*.log
+DriverChecker.log
+Release/DriverChecker.log
+
+# Temporary / OS
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.tmp

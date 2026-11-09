@@ -1,0 +1,53 @@
+================================================================================
+                    DRIVER CHECKER v1.2 - HƯỚNG DẪN SỬ DỤNG
+================================================================================
+
+I. GIỚI THIỆU
+- Driver Checker là công cụ chuyên dụng cho kỹ thuật viên và người dùng cá nhân
+  để quản lý, sao lưu, khôi phục và cập nhật driver cho máy tính Windows 10/11.
+- Toàn bộ driver cập nhật đều được lấy trực tiếp từ máy chủ Microsoft Update Catalog
+  (WHQL Official) nên tuyệt đối an toàn, không chứa quảng cáo hay phần mềm rác.
+- Hoạt động độc lập, không cần cài đặt, không cần .NET Runtime phụ trợ.
+
+--------------------------------------------------------------------------------
+II. QUY TRÌNH CHUẨN KHI CÀI LẠI WINDOWS
+--------------------------------------------------------------------------------
+1. TRƯỚC KHI CÀI LẠI WIN:
+   - Copy thư mục "Release" này vào USB cứu hộ.
+   - Click đúp vào file "1-Click-SaoLuu-Driver.bat" (hoặc mở DriverChecker.exe -> chọn
+     tab "Sao Lưu & Khôi Phục Driver" -> Bấm "Bắt Đầu Sao Lưu").
+   - Toàn bộ driver OEM hiện tại của máy (Wi-Fi, Bluetooth, Âm thanh, Touchpad, VGA...)
+     sẽ được trích xuất sạch sẽ vào thư mục "DriverBackup" trên USB.
+
+2. SAU KHI CÀI LẠI WIN XONG:
+   - Cách A (Không cần mạng): Cắm USB vào máy vừa cài, click chuột phải vào
+     "1-Click-KhoiPhuc-Driver.bat" chọn "Run as administrator". Toàn bộ driver gốc
+     của máy sẽ được cài lại 100% chỉ trong 1-2 phút mà không cần kết nối mạng.
+   - Cách B (Có mạng): Cắm mạng vào, mở "DriverChecker.exe", phần mềm sẽ tự quét
+     và tải về những bản driver mới nhất mà Microsoft phát hành cho từng linh kiện.
+
+--------------------------------------------------------------------------------
+III. CÁC TÍNH NĂNG CHÍNH TRÊN GIAO DIỆN
+--------------------------------------------------------------------------------
+- Tab "Kiểm Tra & Cập Nhật Driver":
+  + Nút "Quét & Kiểm Tra": Đọc toàn bộ danh sách linh kiện phần cứng trên máy.
+  + Ô "Lọc": Gõ nhanh tên linh kiện cần tìm (ví dụ: gõ "display", "wifi", "sound").
+  + Cột "Version Hiện Tại" vs "Version Mới": So sánh phiên bản trực quan.
+  + Tích chọn "Tạo Restore Point": Tự động tạo điểm khôi phục Windows trước khi cài,
+    phòng ngừa trường hợp driver mới không tương thích có thể quay lại bản cũ.
+  + Nút "Cập Nhật Driver": Tự động tải và cài các driver được tích chọn.
+  + Nút "Xuất Báo Cáo": Lưu cấu hình phần cứng và driver ra file Text/CSV.
+  + Nút "Log": Xem nhật ký hoạt động chi tiết để theo dõi tiến trình.
+
+- Tab "Sao Lưu & Khôi Phục Driver":
+  + Dành cho chế độ Offline bằng `pnputil.exe`.
+  + Nhật ký hiển thị trực quan từng thao tác sao lưu/khôi phục.
+
+--------------------------------------------------------------------------------
+IV. SỬ DỤNG DÒNG LỆNH (CHO KỸ THUẬT VIÊN / SCRIPT TỰ ĐỘNG)
+--------------------------------------------------------------------------------
+  DriverChecker.exe /backup "D:\MyDrivers"
+  DriverChecker.exe /restore "D:\MyDrivers"
+
+Chúc bạn cài máy thuận lợi và nhanh chóng!
+================================================================================
