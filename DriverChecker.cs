@@ -5,9 +5,9 @@
 // - Bảng điều khiển thông số máy tính chi tiết
 // - 3 Đồng hồ tròn hiệu năng thời gian thực (CPU, RAM, Ổ đĩa C)
 // - Kiểm tra, cập nhật driver Microsoft & Tải driver GPU từ hãng
-// - Sao lưu & Khôi phục driver OEM offline qua USB (Không cần mạng)
+// - Sao lưu Driver TÙY CHỌN (chọn driver thiết yếu / cần thiết)
+// - Khôi phục driver OEM offline qua USB (Không cần mạng)
 // - Cài đặt ứng dụng thiết yếu 1-Click qua Microsoft Winget
-// - Bộ công cụ sửa lỗi Windows (SFC, DISM, Reset mạng, Dọn rác)
 // Tương thích C# 5 / .NET Framework 4.8
 // ================================================================
 
@@ -89,6 +89,29 @@ namespace DriverChecker
             AvailableUpdate = null;
             UpdateTitle = "";
             NewVersion = "";
+        }
+    }
+
+    // ======== Model Driver OEM để sao lưu ========
+    public class OemDriverItem
+    {
+        public string InfName;
+        public string DeviceName;
+        public string Category;
+        public string Manufacturer;
+        public string DriverVersion;
+        public string DriverDate;
+        public bool IsEssential;
+
+        public OemDriverItem()
+        {
+            InfName = "";
+            DeviceName = "";
+            Category = "";
+            Manufacturer = "";
+            DriverVersion = "";
+            DriverDate = "";
+            IsEssential = false;
         }
     }
 
@@ -178,13 +201,19 @@ namespace DriverChecker
         private List<HardwareDevice> deviceList = new List<HardwareDevice>();
         private int updatesAvailable = 0;
 
-        // --- Trang 3: Sao lưu & Khôi phục ---
+        // --- Trang 3: Sao lưu & Khôi phục (Tùy chọn) ---
         private TextBox txtBackupPath;
         private TextBox txtRestorePath;
         private Button btnStartBackup;
+        private Button btnSelectEssentialBk;
+        private Button btnSelectAllBk;
+        private Button btnDeselectBk;
         private Button btnStartRestore;
-        private ListView lvBackupLog;
-        private Label lblBackupResult;
+        private ListView lvBackupDrivers;
+        private ProgressBar prgBackup;
+        private Label lblBackupStatus;
+        private Label lblBackupCount;
+        private List<OemDriverItem> oemDriverList = new List<OemDriverItem>();
 
         // --- Trang 4: Cài đặt ứng dụng ---
         private ListView lvApps;
@@ -219,6 +248,7 @@ namespace DriverChecker
             d["PRINTQUEUE"] = "Máy in & Máy quét";
             d["BIOMETRIC"] = "Sinh trắc học & Vân tay";
             d["SENSOR"] = "Cảm biến phần cứng";
+            d["SECURITYDEVICES"] = "Bảo mật phần cứng";
             d["SOFTWAREDEVICE"] = "Thiết bị phần mềm";
             return d;
         }
@@ -399,7 +429,6 @@ namespace DriverChecker
             this.Controls.Add(mainContainer);
             this.Controls.Add(sidebar);
 
-            // Đo tải CPU/RAM/Ổ cứng mỗi 2 giây
             gaugeTimer = new Timer();
             gaugeTimer.Interval = 2000;
             gaugeTimer.Tick += delegate(object s, EventArgs e) { RefreshGauges(); };
@@ -430,6 +459,10 @@ namespace DriverChecker
             if (index == 1 && deviceList.Count == 0)
             {
                 Task.Run(async delegate() { await RunFullScanAsync(); });
+            }
+            else if (index == 2 && oemDriverList.Count == 0)
+            {
+                Task.Run(async delegate() { await LoadOemDriversAsync(); });
             }
         }
 
@@ -634,7 +667,6 @@ namespace DriverChecker
             topBar.BackColor = CardBg;
             topBar.Padding = new Padding(16, 8, 16, 8);
 
-            // Banner GPU
             pnlGpuBanner = new Panel();
             pnlGpuBanner.Dock = DockStyle.Top;
             pnlGpuBanner.Height = 40;
@@ -672,7 +704,6 @@ namespace DriverChecker
             pnlGpuBanner.Controls.Add(lblGpuBannerText);
             pnlGpuBanner.Controls.Add(btnBannerDownload);
 
-            // Hàng nút điều khiển
             Panel rowBtns = new Panel();
             rowBtns.Dock = DockStyle.Bottom;
             rowBtns.Height = 48;
@@ -754,7 +785,6 @@ namespace DriverChecker
             topBar.Controls.Add(rowBtns);
             topBar.Controls.Add(pnlGpuBanner);
 
-            // Bảng danh sách thiết bị
             lvDevices = new ListView();
             lvDevices.Dock = DockStyle.Fill;
             lvDevices.View = View.Details;
@@ -802,131 +832,473 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  TRANG 3: SAO LƯU & KHÔI PHỤC (OFFLINE)
+        //  TRANG 3: SAO LƯU TÙY CHỌN & KHÔI PHỤC DRIVER (OFFLINE)
         // ================================================================
         private void BuildBackupPage(Panel page)
         {
-            page.Padding = new Padding(24, 20, 24, 20);
+            Panel topBar = new Panel();
+            topBar.Dock = DockStyle.Top;
+            topBar.Height = 110;
+            topBar.BackColor = CardBg;
+            topBar.Padding = new Padding(16, 10, 16, 8);
 
-            Label lblBkTitle = new Label();
-            lblBkTitle.Text = "Sao lưu & Khôi phục Driver (Offline không cần mạng)";
-            lblBkTitle.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
-            lblBkTitle.ForeColor = TextPrimary;
-            lblBkTitle.Location = new Point(24, 12);
-            lblBkTitle.AutoSize = true;
-            page.Controls.Add(lblBkTitle);
-
-            // Khung Sao lưu
-            GroupBox grpBk = new GroupBox();
-            grpBk.Text = "  Sao lưu toàn bộ Driver OEM ra USB (Dùng trước khi cài lại Win)";
-            grpBk.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            grpBk.Location = new Point(24, 50);
-            grpBk.Size = new Size(900, 120);
-            grpBk.ForeColor = PrimaryColor;
-
-            Label lblBkDesc = new Label();
-            lblBkDesc.Text = "Trích xuất toàn bộ driver gốc của máy ra thư mục. Khi cài lại Win chỉ cần nạp lại là nhận đủ mọi phần cứng.";
-            lblBkDesc.Font = new Font("Segoe UI", 9f);
-            lblBkDesc.ForeColor = TextSecondary;
-            lblBkDesc.Location = new Point(16, 26);
-            lblBkDesc.AutoSize = true;
+            // Row 1: Thư mục lưu
+            Label lblPath = new Label();
+            lblPath.Text = "Thư mục lưu ra USB:";
+            lblPath.Location = new Point(12, 12);
+            lblPath.AutoSize = true;
+            lblPath.Font = new Font("Segoe UI", 9.2f, FontStyle.Bold);
+            lblPath.ForeColor = TextPrimary;
 
             txtBackupPath = new TextBox();
             txtBackupPath.Font = new Font("Segoe UI", 9.5f);
-            txtBackupPath.Location = new Point(16, 50);
-            txtBackupPath.Size = new Size(635, 28);
+            txtBackupPath.Location = new Point(160, 8);
+            txtBackupPath.Size = new Size(540, 28);
             txtBackupPath.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "DriverBackup");
 
             Button btnBrowseBk = new Button();
             btnBrowseBk.Text = "...";
-            btnBrowseBk.Location = new Point(658, 49);
-            btnBrowseBk.Size = new Size(35, 28);
+            btnBrowseBk.Location = new Point(706, 7);
+            btnBrowseBk.Size = new Size(36, 28);
             btnBrowseBk.Click += delegate(object s, EventArgs e)
             {
                 using (var fbd = new FolderBrowserDialog())
                     if (fbd.ShowDialog() == DialogResult.OK) txtBackupPath.Text = fbd.SelectedPath;
             };
 
-            btnStartBackup = CreateButton("Bắt đầu sao lưu", PrimaryColor, true);
-            btnStartBackup.Location = new Point(702, 48);
-            btnStartBackup.Size = new Size(180, 30);
-            btnStartBackup.Click += async delegate(object s, EventArgs e) { await BackupDriversAsync(); };
+            lblBackupCount = new Label();
+            lblBackupCount.Text = "Đang quét danh sách driver trên máy...";
+            lblBackupCount.Location = new Point(752, 12);
+            lblBackupCount.AutoSize = true;
+            lblBackupCount.Font = new Font("Segoe UI", 9f);
+            lblBackupCount.ForeColor = TextSecondary;
 
-            lblBackupResult = new Label();
-            lblBackupResult.Text = "";
-            lblBackupResult.ForeColor = Color.FromArgb(22, 163, 74);
-            lblBackupResult.Location = new Point(16, 88);
-            lblBackupResult.AutoSize = true;
+            topBar.Controls.Add(lblPath);
+            topBar.Controls.Add(txtBackupPath);
+            topBar.Controls.Add(btnBrowseBk);
+            topBar.Controls.Add(lblBackupCount);
 
-            grpBk.Controls.Add(lblBkDesc);
-            grpBk.Controls.Add(txtBackupPath);
-            grpBk.Controls.Add(btnBrowseBk);
-            grpBk.Controls.Add(btnStartBackup);
-            grpBk.Controls.Add(lblBackupResult);
-            page.Controls.Add(grpBk);
+            // Row 2: Các nút hành động
+            Panel rowBtns = new Panel();
+            rowBtns.Location = new Point(12, 48);
+            rowBtns.Size = new Size(920, 52);
 
-            // Khung Khôi phục
-            GroupBox grpRs = new GroupBox();
-            grpRs.Text = "  Khôi phục Driver sau khi cài Win (100% Không cần kết nối mạng)";
-            grpRs.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            grpRs.Location = new Point(24, 180);
-            grpRs.Size = new Size(900, 110);
-            grpRs.ForeColor = Color.FromArgb(22, 163, 74);
+            btnStartBackup = CreateButton("Sao lưu Driver đã chọn", PrimaryColor, true);
+            btnStartBackup.Location = new Point(0, 8);
+            btnStartBackup.Size = new Size(210, 36);
+            btnStartBackup.Click += async delegate(object s, EventArgs e) { await BackupSelectedDriversAsync(); };
 
-            Label lblRsDesc = new Label();
-            lblRsDesc.Text = "Chọn thư mục DriverBackup đã lưu trên USB để cài đặt lại toàn bộ driver vào máy trong vòng 1-2 phút.";
-            lblRsDesc.Font = new Font("Segoe UI", 9f);
-            lblRsDesc.ForeColor = TextSecondary;
-            lblRsDesc.Location = new Point(16, 26);
-            lblRsDesc.AutoSize = true;
+            btnSelectEssentialBk = new Button();
+            btnSelectEssentialBk.Text = "Chỉ chọn Driver thiết yếu";
+            btnSelectEssentialBk.Location = new Point(220, 8);
+            btnSelectEssentialBk.Size = new Size(200, 36);
+            btnSelectEssentialBk.FlatStyle = FlatStyle.Flat;
+            btnSelectEssentialBk.FlatAppearance.BorderColor = CardBorder;
+            btnSelectEssentialBk.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            btnSelectEssentialBk.ForeColor = PrimaryColor;
+            btnSelectEssentialBk.Cursor = Cursors.Hand;
+            btnSelectEssentialBk.Click += delegate(object s, EventArgs e)
+            {
+                foreach (ListViewItem item in lvBackupDrivers.Items)
+                {
+                    var drv = item.Tag as OemDriverItem;
+                    item.Checked = (drv != null && drv.IsEssential);
+                }
+                UpdateBackupCountLabel();
+            };
+
+            btnSelectAllBk = new Button();
+            btnSelectAllBk.Text = "Chọn hết";
+            btnSelectAllBk.Location = new Point(430, 8);
+            btnSelectAllBk.Size = new Size(85, 36);
+            btnSelectAllBk.FlatStyle = FlatStyle.Flat;
+            btnSelectAllBk.FlatAppearance.BorderColor = CardBorder;
+            btnSelectAllBk.Font = new Font("Segoe UI", 9f);
+            btnSelectAllBk.Cursor = Cursors.Hand;
+            btnSelectAllBk.Click += delegate(object s, EventArgs e)
+            {
+                foreach (ListViewItem item in lvBackupDrivers.Items) item.Checked = true;
+                UpdateBackupCountLabel();
+            };
+
+            btnDeselectBk = new Button();
+            btnDeselectBk.Text = "Bỏ chọn";
+            btnDeselectBk.Location = new Point(522, 8);
+            btnDeselectBk.Size = new Size(85, 36);
+            btnDeselectBk.FlatStyle = FlatStyle.Flat;
+            btnDeselectBk.FlatAppearance.BorderColor = CardBorder;
+            btnDeselectBk.Font = new Font("Segoe UI", 9f);
+            btnDeselectBk.Cursor = Cursors.Hand;
+            btnDeselectBk.Click += delegate(object s, EventArgs e)
+            {
+                foreach (ListViewItem item in lvBackupDrivers.Items) item.Checked = false;
+                UpdateBackupCountLabel();
+            };
+
+            rowBtns.Controls.Add(btnStartBackup);
+            rowBtns.Controls.Add(btnSelectEssentialBk);
+            rowBtns.Controls.Add(btnSelectAllBk);
+            rowBtns.Controls.Add(btnDeselectBk);
+            topBar.Controls.Add(rowBtns);
+
+            // Bảng danh sách Driver OEM có checkbox
+            lvBackupDrivers = new ListView();
+            lvBackupDrivers.Dock = DockStyle.Fill;
+            lvBackupDrivers.View = View.Details;
+            lvBackupDrivers.FullRowSelect = true;
+            lvBackupDrivers.GridLines = true;
+            lvBackupDrivers.CheckBoxes = true;
+            lvBackupDrivers.Font = new Font("Segoe UI", 9.2f);
+            lvBackupDrivers.BackColor = CardBg;
+            lvBackupDrivers.BorderStyle = BorderStyle.None;
+            lvBackupDrivers.ItemChecked += delegate(object s, ItemCheckedEventArgs e)
+            {
+                UpdateBackupCountLabel();
+            };
+
+            lvBackupDrivers.Columns.Add("", 35, HorizontalAlignment.Center);
+            lvBackupDrivers.Columns.Add("Loại phần cứng", 150);
+            lvBackupDrivers.Columns.Add("Tên thiết bị", 270);
+            lvBackupDrivers.Columns.Add("Nhà sản xuất", 140);
+            lvBackupDrivers.Columns.Add("Gói INF", 100);
+            lvBackupDrivers.Columns.Add("Phiên bản", 125);
+            lvBackupDrivers.Columns.Add("Ngày phát hành", 100);
+
+            // Khung khôi phục driver bên dưới (Restore Bar)
+            Panel btmRestore = new Panel();
+            btmRestore.Dock = DockStyle.Bottom;
+            btmRestore.Height = 110;
+            btmRestore.BackColor = Color.FromArgb(241, 245, 249);
+            btmRestore.Padding = new Padding(16, 10, 16, 8);
+            btmRestore.Paint += delegate(object s, PaintEventArgs e)
+            {
+                using (var pen = new Pen(CardBorder, 1))
+                    e.Graphics.DrawLine(pen, 0, 0, btmRestore.Width, 0);
+            };
+
+            Label lblRsTitle = new Label();
+            lblRsTitle.Text = "Khôi phục Driver sau khi cài Win (100% Không cần kết nối mạng):";
+            lblRsTitle.Location = new Point(16, 12);
+            lblRsTitle.AutoSize = true;
+            lblRsTitle.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            lblRsTitle.ForeColor = Color.FromArgb(22, 163, 74);
+
+            Label lblRsPath = new Label();
+            lblRsPath.Text = "Thư mục trên USB:";
+            lblRsPath.Location = new Point(16, 42);
+            lblRsPath.AutoSize = true;
+            lblRsPath.Font = new Font("Segoe UI", 9f);
+            lblRsPath.ForeColor = TextSecondary;
 
             txtRestorePath = new TextBox();
             txtRestorePath.Font = new Font("Segoe UI", 9.5f);
-            txtRestorePath.Location = new Point(16, 52);
-            txtRestorePath.Size = new Size(635, 28);
+            txtRestorePath.Location = new Point(140, 38);
+            txtRestorePath.Size = new Size(500, 28);
 
             Button btnBrowseRs = new Button();
             btnBrowseRs.Text = "...";
-            btnBrowseRs.Location = new Point(658, 51);
-            btnBrowseRs.Size = new Size(35, 28);
+            btnBrowseRs.Location = new Point(646, 37);
+            btnBrowseRs.Size = new Size(36, 28);
             btnBrowseRs.Click += delegate(object s, EventArgs e)
             {
                 using (var fbd = new FolderBrowserDialog())
                     if (fbd.ShowDialog() == DialogResult.OK) txtRestorePath.Text = fbd.SelectedPath;
             };
 
-            btnStartRestore = CreateButton("Bắt đầu khôi phục", Color.FromArgb(22, 163, 74), true);
-            btnStartRestore.Location = new Point(702, 50);
-            btnStartRestore.Size = new Size(180, 30);
+            btnStartRestore = CreateButton("Bắt đầu khôi phục toàn bộ", Color.FromArgb(22, 163, 74), true);
+            btnStartRestore.Location = new Point(692, 36);
+            btnStartRestore.Size = new Size(220, 32);
             btnStartRestore.Click += async delegate(object s, EventArgs e) { await RestoreDriversAsync(); };
 
-            grpRs.Controls.Add(lblRsDesc);
-            grpRs.Controls.Add(txtRestorePath);
-            grpRs.Controls.Add(btnBrowseRs);
-            grpRs.Controls.Add(btnStartRestore);
-            page.Controls.Add(grpRs);
+            lblBackupStatus = new Label();
+            lblBackupStatus.Text = "Sẵn sàng. Tích chọn các driver cần lưu rồi bấm \"Sao lưu Driver đã chọn\".";
+            lblBackupStatus.Location = new Point(16, 76);
+            lblBackupStatus.AutoSize = true;
+            lblBackupStatus.ForeColor = TextSecondary;
 
-            // Bảng nhật ký
-            Label lblLogTitle = new Label();
-            lblLogTitle.Text = "Nhật ký quá trình sao lưu & khôi phục:";
-            lblLogTitle.Location = new Point(24, 300);
-            lblLogTitle.AutoSize = true;
-            lblLogTitle.Font = new Font("Segoe UI", 9.2f, FontStyle.Bold);
-            page.Controls.Add(lblLogTitle);
+            prgBackup = new ProgressBar();
+            prgBackup.Size = new Size(220, 16);
+            prgBackup.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+            prgBackup.Location = new Point(btmRestore.Width - 240, 76);
+            prgBackup.Visible = false;
+            btmRestore.Resize += delegate(object s, EventArgs e) { prgBackup.Location = new Point(btmRestore.Width - 240, 76); };
 
-            lvBackupLog = new ListView();
-            lvBackupLog.Location = new Point(24, 325);
-            lvBackupLog.Size = new Size(900, 240);
-            lvBackupLog.View = View.Details;
-            lvBackupLog.FullRowSelect = true;
-            lvBackupLog.GridLines = true;
-            lvBackupLog.Font = new Font("Segoe UI", 9f);
-            lvBackupLog.BackColor = CardBg;
-            lvBackupLog.BorderStyle = BorderStyle.FixedSingle;
-            lvBackupLog.Columns.Add("Thời gian", 90);
-            lvBackupLog.Columns.Add("Thao tác", 130);
-            lvBackupLog.Columns.Add("Nội dung chi tiết", 660);
-            page.Controls.Add(lvBackupLog);
+            btmRestore.Controls.Add(lblRsTitle);
+            btmRestore.Controls.Add(lblRsPath);
+            btmRestore.Controls.Add(txtRestorePath);
+            btmRestore.Controls.Add(btnBrowseRs);
+            btmRestore.Controls.Add(btnStartRestore);
+            btmRestore.Controls.Add(lblBackupStatus);
+            btmRestore.Controls.Add(prgBackup);
+
+            page.Controls.Add(lvBackupDrivers);
+            page.Controls.Add(btmRestore);
+            page.Controls.Add(topBar);
+        }
+
+        private async Task LoadOemDriversAsync()
+        {
+            SafeInvoke(delegate()
+            {
+                lblBackupCount.Text = "Đang đọc danh sách driver OEM...";
+                lvBackupDrivers.Items.Clear();
+                oemDriverList.Clear();
+            });
+
+            await Task.Run(new Action(delegate()
+            {
+                try
+                {
+                    var searcher = new ManagementObjectSearcher(
+                        "SELECT InfName, DeviceName, DeviceClass, Manufacturer, DriverVersion, DriverDate " +
+                        "FROM Win32_PnPSignedDriver WHERE InfName LIKE 'oem%.inf'");
+
+                    var seenInfs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        string inf = (obj["InfName"] ?? "").ToString().Trim();
+                        if (string.IsNullOrEmpty(inf) || seenInfs.Contains(inf)) continue;
+                        seenInfs.Add(inf);
+
+                        string name = (obj["DeviceName"] ?? "").ToString().Trim();
+                        if (string.IsNullOrEmpty(name)) name = inf;
+
+                        string devClass = (obj["DeviceClass"] ?? "").ToString().Trim().ToUpper();
+                        string cat = CategoryNames.ContainsKey(devClass) ? CategoryNames[devClass] : devClass;
+                        string mfr = (obj["Manufacturer"] ?? "").ToString().Trim();
+
+                        string rawDate = (obj["DriverDate"] ?? "").ToString();
+                        string dateStr = "Không rõ";
+                        if (rawDate.Length >= 8)
+                            dateStr = rawDate.Substring(0, 4) + "-" + rawDate.Substring(4, 2) + "-" + rawDate.Substring(6, 2);
+
+                        // Nhận diện driver thiết yếu: Card màn hình, mạng, wifi, bluetooth, âm thanh, chipset
+                        string nLower = name.ToLower();
+                        bool isVirtual = nLower.Contains("vpn") || nLower.Contains("tap-windows") ||
+                                         nLower.Contains("vmware") || nLower.Contains("deskin") ||
+                                         nLower.Contains("virtual") || nLower.Contains("vhid") ||
+                                         nLower.Contains("zuler");
+
+                        string[] essentialClasses = { "DISPLAY", "NET", "MEDIA", "BLUETOOTH", "SYSTEM", "SECURITYDEVICES", "HDC", "SCSIADAPTER" };
+                        bool isEssential = (!isVirtual) && essentialClasses.Contains(devClass);
+
+                        var item = new OemDriverItem();
+                        item.InfName = inf;
+                        item.DeviceName = name;
+                        item.Category = cat;
+                        item.Manufacturer = mfr;
+                        item.DriverVersion = (obj["DriverVersion"] ?? "").ToString();
+                        item.DriverDate = dateStr;
+                        item.IsEssential = isEssential;
+
+                        oemDriverList.Add(item);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("Lỗi nạp danh sách OEM Driver: " + ex.Message);
+                }
+            }));
+
+            oemDriverList = oemDriverList.OrderByDescending(d => d.IsEssential)
+                                         .ThenBy(d => d.Category)
+                                         .ThenBy(d => d.DeviceName).ToList();
+
+            SafeInvoke(delegate()
+            {
+                lvBackupDrivers.BeginUpdate();
+                lvBackupDrivers.Items.Clear();
+
+                foreach (var drv in oemDriverList)
+                {
+                    var lvi = new ListViewItem("");
+                    lvi.SubItems.Add(drv.Category);
+                    lvi.SubItems.Add(drv.DeviceName);
+                    lvi.SubItems.Add(drv.Manufacturer);
+                    lvi.SubItems.Add(drv.InfName);
+                    lvi.SubItems.Add(drv.DriverVersion);
+                    lvi.SubItems.Add(drv.DriverDate);
+                    lvi.Tag = drv;
+                    lvi.Checked = drv.IsEssential; // Tự động tích chọn driver thiết yếu
+
+                    if (drv.IsEssential)
+                    {
+                        lvi.ForeColor = Color.FromArgb(15, 23, 42);
+                        lvi.Font = new Font("Segoe UI", 9.2f, FontStyle.Bold);
+                    }
+                    else
+                    {
+                        lvi.ForeColor = Color.FromArgb(148, 163, 184);
+                    }
+
+                    lvBackupDrivers.Items.Add(lvi);
+                }
+
+                lvBackupDrivers.EndUpdate();
+                UpdateBackupCountLabel();
+            });
+        }
+
+        private void UpdateBackupCountLabel()
+        {
+            int checkedCount = 0;
+            foreach (ListViewItem item in lvBackupDrivers.Items)
+            {
+                if (item.Checked) checkedCount++;
+            }
+            lblBackupCount.Text = string.Format("Đã chọn: {0} / {1} gói driver", checkedCount, lvBackupDrivers.Items.Count);
+        }
+
+        private async Task BackupSelectedDriversAsync()
+        {
+            var selected = new List<OemDriverItem>();
+            foreach (ListViewItem lvi in lvBackupDrivers.Items)
+            {
+                if (lvi.Checked)
+                {
+                    var drv = lvi.Tag as OemDriverItem;
+                    if (drv != null) selected.Add(drv);
+                }
+            }
+
+            if (selected.Count == 0)
+            {
+                MessageBox.Show("Vui lòng tích chọn ít nhất 1 driver để sao lưu!", "Thông báo");
+                return;
+            }
+
+            string path = txtBackupPath.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                MessageBox.Show("Vui lòng nhập đường dẫn thư mục lưu trữ!", "Thông báo");
+                return;
+            }
+
+            btnStartBackup.Enabled = false;
+            btnSelectEssentialBk.Enabled = false;
+            prgBackup.Visible = true;
+            prgBackup.Maximum = selected.Count;
+            prgBackup.Value = 0;
+
+            lblBackupStatus.Text = string.Format("Đang sao lưu {0} driver đã chọn ra USB...", selected.Count);
+            lblBackupStatus.ForeColor = PrimaryColor;
+
+            int success = 0;
+            int failed = 0;
+
+            await Task.Run(new Action(delegate()
+            {
+                try
+                {
+                    if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+
+                    foreach (var drv in selected)
+                    {
+                        SafeInvoke(delegate()
+                        {
+                            lblBackupStatus.Text = string.Format("Đang xuất: {0} ({1})...", drv.DeviceName, drv.InfName);
+                        });
+
+                        try
+                        {
+                            var psi = new ProcessStartInfo("pnputil.exe",
+                                string.Format("/export-driver {0} \"{1}\"", drv.InfName, path));
+                            psi.UseShellExecute = false;
+                            psi.CreateNoWindow = true;
+                            var p = Process.Start(psi);
+                            p.WaitForExit();
+
+                            if (p.ExitCode == 0) success++;
+                            else failed++;
+                        }
+                        catch { failed++; }
+
+                        SafeInvoke(delegate()
+                        {
+                            prgBackup.Value = Math.Min(prgBackup.Value + 1, prgBackup.Maximum);
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("Lỗi sao lưu driver: " + ex.Message);
+                }
+            }));
+
+            prgBackup.Visible = false;
+            btnStartBackup.Enabled = true;
+            btnSelectEssentialBk.Enabled = true;
+
+            string res = string.Format("Sao lưu hoàn tất!\nThành công: {0} gói driver\nThất bại: {1}\n\nThư mục lưu:\n{2}", success, failed, path);
+            lblBackupStatus.Text = string.Format("Đã sao lưu thành công {0} gói driver vào {1}", success, path);
+            lblBackupStatus.ForeColor = Color.FromArgb(22, 163, 74);
+
+            if (MessageBox.Show(res + "\n\nBạn có muốn mở thư mục kiểm tra không?", "Hoàn tất sao lưu",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            {
+                Process.Start("explorer.exe", path);
+            }
+        }
+
+        private async Task RestoreDriversAsync()
+        {
+            string path = txtRestorePath.Text.Trim();
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+            {
+                MessageBox.Show("Thư mục chứa driver sao lưu không tồn tại!\nVui lòng chọn lại thư mục trên USB.", "Thông báo");
+                return;
+            }
+
+            int count = 0;
+            try { count = Directory.GetFiles(path, "*.inf", SearchOption.AllDirectories).Length; } catch { }
+            if (count == 0)
+            {
+                MessageBox.Show("Không tìm thấy file driver (.inf) nào trong thư mục đã chọn!", "Thông báo");
+                return;
+            }
+
+            if (MessageBox.Show(string.Format("Tìm thấy {0} file driver trong thư mục.\nBạn có muốn nạp lại toàn bộ vào máy tính ngay (không cần mạng)?", count),
+                "Xác nhận khôi phục", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            btnStartRestore.Enabled = false;
+            lblBackupStatus.Text = "Đang nạp toàn bộ driver vào hệ thống...";
+            lblBackupStatus.ForeColor = PrimaryColor;
+
+            bool ok = false;
+            await Task.Run(new Action(delegate()
+            {
+                try
+                {
+                    var p = Process.Start(new ProcessStartInfo("pnputil.exe", "/add-driver \"" + path + "\\*.inf\" /subdirs /install")
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                    p.WaitForExit();
+                    ok = (p.ExitCode == 0 || p.ExitCode == 3010);
+                }
+                catch { }
+            }));
+
+            btnStartRestore.Enabled = true;
+
+            if (ok)
+            {
+                lblBackupStatus.Text = "Đã khôi phục toàn bộ driver thành công!";
+                lblBackupStatus.ForeColor = Color.FromArgb(22, 163, 74);
+                if (MessageBox.Show("Khôi phục driver thành công!\nBạn có muốn khởi động lại máy để phần cứng hoạt động ổn định nhất?",
+                    "Thành công", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    Process.Start("shutdown.exe", "/r /t 5 /c \"Khởi động lại sau khi nạp driver.\"");
+                }
+            }
+            else
+            {
+                lblBackupStatus.Text = "Khôi phục thất bại!";
+                lblBackupStatus.ForeColor = Color.FromArgb(220, 38, 38);
+                MessageBox.Show("Khôi phục driver thất bại. Hãy kiểm tra lại quyền Administrator!", "Lỗi");
+            }
         }
 
         // ================================================================
@@ -1291,7 +1663,7 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  LOGIC: QUÉT & CÀI ĐẶT DRIVER
+        //  LOGIC: QUÉT & CÀI ĐẶT DRIVER MICROSOFT
         // ================================================================
         private async Task RunFullScanAsync()
         {
@@ -1590,123 +1962,6 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  LOGIC: SAO LƯU & KHÔI PHỤC DRIVER
-        // ================================================================
-        private async Task BackupDriversAsync()
-        {
-            string path = txtBackupPath.Text.Trim();
-            if (string.IsNullOrEmpty(path)) { MessageBox.Show("Vui lòng chọn đường dẫn thư mục lưu trữ!", "Thông báo"); return; }
-
-            btnStartBackup.Enabled = false;
-            btnStartRestore.Enabled = false;
-            lblBackupResult.Text = "Đang trích xuất toàn bộ driver OEM của máy ra USB...";
-            AddBackupLog("Sao lưu", "Bắt đầu trích xuất driver vào thư mục: " + path);
-
-            bool ok = false;
-            await Task.Run(new Action(delegate()
-            {
-                try
-                {
-                    if (!Directory.Exists(path)) Directory.CreateDirectory(path);
-                    var p = Process.Start(new ProcessStartInfo("pnputil.exe", "/export-driver * \"" + path + "\"")
-                    {
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                    p.WaitForExit();
-                    ok = (p.ExitCode == 0);
-                }
-                catch { }
-            }));
-
-            btnStartBackup.Enabled = true;
-            btnStartRestore.Enabled = true;
-
-            if (ok)
-            {
-                int count = 0;
-                try { count = Directory.GetDirectories(path).Length; } catch { }
-                lblBackupResult.Text = string.Format("Đã sao lưu thành công {0} gói driver!", count);
-                lblBackupResult.ForeColor = Color.FromArgb(22, 163, 74);
-                AddBackupLog("Thành công", string.Format("Đã lưu {0} gói driver tại: {1}", count, path));
-                if (MessageBox.Show(string.Format("Đã sao lưu thành công {0} gói driver ra USB!\nBạn có muốn mở thư mục xem không?", count),
-                    "Thành công", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                {
-                    Process.Start("explorer.exe", path);
-                }
-            }
-            else
-            {
-                lblBackupResult.Text = "Sao lưu thất bại. Hãy kiểm tra lại quyền Administrator!";
-                lblBackupResult.ForeColor = Color.FromArgb(220, 38, 38);
-                AddBackupLog("Thất bại", "Không thể trích xuất driver qua pnputil");
-            }
-        }
-
-        private async Task RestoreDriversAsync()
-        {
-            string path = txtRestorePath.Text.Trim();
-            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
-            {
-                MessageBox.Show("Thư mục chứa driver sao lưu không tồn tại!\nVui lòng chọn lại thư mục trên USB.", "Thông báo");
-                return;
-            }
-
-            int count = 0;
-            try { count = Directory.GetFiles(path, "*.inf", SearchOption.AllDirectories).Length; } catch { }
-            if (count == 0)
-            {
-                MessageBox.Show("Không tìm thấy file driver (.inf) nào trong thư mục đã chọn!", "Thông báo");
-                return;
-            }
-
-            if (MessageBox.Show(string.Format("Tìm thấy {0} file driver trong thư mục.\nBạn có muốn nạp lại toàn bộ vào máy tính ngay (không cần mạng)?", count),
-                "Xác nhận khôi phục", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-
-            btnStartBackup.Enabled = false;
-            btnStartRestore.Enabled = false;
-            lblBackupResult.Text = "Đang nạp toàn bộ driver vào hệ thống...";
-            AddBackupLog("Khôi phục", string.Format("Bắt đầu nạp {0} driver từ: {1}", count, path));
-
-            bool ok = false;
-            await Task.Run(new Action(delegate()
-            {
-                try
-                {
-                    var p = Process.Start(new ProcessStartInfo("pnputil.exe", "/add-driver \"" + path + "\\*.inf\" /subdirs /install")
-                    {
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                    p.WaitForExit();
-                    ok = (p.ExitCode == 0 || p.ExitCode == 3010);
-                }
-                catch { }
-            }));
-
-            btnStartBackup.Enabled = true;
-            btnStartRestore.Enabled = true;
-
-            if (ok)
-            {
-                lblBackupResult.Text = "Đã khôi phục driver thành công!";
-                lblBackupResult.ForeColor = Color.FromArgb(22, 163, 74);
-                AddBackupLog("Thành công", "Đã nạp toàn bộ driver vào Windows.");
-                if (MessageBox.Show("Khôi phục driver thành công!\nBạn có muốn khởi động lại máy để phần cứng hoạt động ổn định nhất?",
-                    "Thành công", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                {
-                    Process.Start("shutdown.exe", "/r /t 5 /c \"Khởi động lại sau khi nạp driver.\"");
-                }
-            }
-            else
-            {
-                lblBackupResult.Text = "Khôi phục thất bại!";
-                lblBackupResult.ForeColor = Color.FromArgb(220, 38, 38);
-                AddBackupLog("Thất bại", "Lỗi trong quá trình nạp driver bằng pnputil");
-            }
-        }
-
-        // ================================================================
         //  LOGIC: CÀI ĐẶT ỨNG DỤNG QUA WINGET
         // ================================================================
         private async Task InstallSelectedAppsAsync()
@@ -1821,17 +2076,6 @@ namespace DriverChecker
                 return ((uint)res["ReturnValue"] == 0);
             }
             catch { return false; }
-        }
-
-        private void AddBackupLog(string action, string detail)
-        {
-            SafeInvoke(delegate()
-            {
-                var lvi = new ListViewItem(DateTime.Now.ToString("HH:mm:ss"));
-                lvi.SubItems.Add(action);
-                lvi.SubItems.Add(detail);
-                lvBackupLog.Items.Insert(0, lvi);
-            });
         }
 
         private void ExportReport(object sender, EventArgs e)
