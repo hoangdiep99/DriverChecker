@@ -195,14 +195,6 @@ namespace DriverChecker
         private Label lblAppStatus;
         private List<WingetApp> appList = new List<WingetApp>();
 
-        // --- Trang 5: Sửa lỗi & Tối ưu ---
-        private Button btnRunSfc;
-        private Button btnRunDism;
-        private Button btnResetNet;
-        private Button btnCleanTemp;
-        private Button btnResetWu;
-        private TextBox txtFixLog;
-
         // Bảng phân loại phần cứng chuẩn Tiếng Việt
         private static readonly Dictionary<string, string> CategoryNames = InitCategoryNames();
 
@@ -342,8 +334,7 @@ namespace DriverChecker
                 "  Bảng điều khiển",
                 "  Kiểm tra Driver",
                 "  Sao lưu & Khôi phục",
-                "  Cài đặt ứng dụng",
-                "  Sửa lỗi & Tối ưu"
+                "  Cài đặt ứng dụng"
             };
 
             navButtons = new Button[navTitles.Length];
@@ -391,8 +382,8 @@ namespace DriverChecker
             mainContainer.Dock = DockStyle.Fill;
             mainContainer.BackColor = BgColor;
 
-            contentPages = new Panel[5];
-            for (int i = 0; i < 5; i++)
+            contentPages = new Panel[4];
+            for (int i = 0; i < 4; i++)
             {
                 contentPages[i] = new Panel();
                 contentPages[i].Dock = DockStyle.Fill;
@@ -404,7 +395,6 @@ namespace DriverChecker
             BuildDriverPage(contentPages[1]);
             BuildBackupPage(contentPages[2]);
             BuildAppInstallerPage(contentPages[3]);
-            BuildFixOptimizePage(contentPages[4]);
 
             this.Controls.Add(mainContainer);
             this.Controls.Add(sidebar);
@@ -1060,63 +1050,6 @@ namespace DriverChecker
             appList.Add(new WingetApp("Discord", "Discord.Discord", "Giao tiếp cộng đồng", "Kênh trò chuyện, gọi thoại nhóm cho game thủ và đội ngũ", false));
             appList.Add(new WingetApp("Steam", "Valve.Steam", "Nền tảng chơi game", "Kho game bản quyền hàng đầu thế giới", false));
             appList.Add(new WingetApp("Visual Studio Code", "Microsoft.VisualStudioCode", "Lập trình phần mềm", "Trình soạn thảo mã nguồn chuyên nghiệp của Microsoft", false));
-        }
-
-        // ================================================================
-        //  TRANG 5: SỬA LỖI & TỐI ƯU HỆ THỐNG
-        // ================================================================
-        private void BuildFixOptimizePage(Panel page)
-        {
-            page.Padding = new Padding(24, 20, 24, 20);
-
-            Label lblFixTitle = new Label();
-            lblFixTitle.Text = "Sửa lỗi & Tối ưu hóa hệ thống (1-Click)";
-            lblFixTitle.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
-            lblFixTitle.ForeColor = TextPrimary;
-            lblFixTitle.Location = new Point(24, 12);
-            lblFixTitle.AutoSize = true;
-            page.Controls.Add(lblFixTitle);
-
-            int btnW = 280;
-            int btnH = 68;
-
-            btnRunSfc = CreateToolButton("Sửa tập tin hệ thống (SFC)", "Tự động phát hiện và sửa các file Windows bị hỏng (sfc /scannow)", 24, 52, btnW, btnH);
-            btnRunSfc.Click += delegate(object s, EventArgs e) { RunCmdTool("sfc.exe", "/scannow", "SFC Scannow"); };
-
-            btnRunDism = CreateToolButton("Sửa chữa ảnh Windows (DISM)", "Tải gói chuẩn từ Microsoft để phục hồi hệ thống (DISM)", 320, 52, btnW, btnH);
-            btnRunDism.Click += delegate(object s, EventArgs e) { RunCmdTool("dism.exe", "/online /cleanup-image /restorehealth", "DISM RestoreHealth"); };
-
-            btnResetNet = CreateToolButton("Khôi phục mạng (Reset Network)", "Sửa lỗi mạng bị chấm than vàng, mất kết nối Wi-Fi/LAN", 616, 52, btnW, btnH);
-            btnResetNet.Click += ResetNetwork;
-
-            btnCleanTemp = CreateToolButton("Dọn dẹp file rác & Bộ nhớ đệm", "Xóa các file tạm Temp, Prefetch giúp giải phóng ổ C", 24, 132, btnW, btnH);
-            btnCleanTemp.Click += CleanTempFiles;
-
-            btnResetWu = CreateToolButton("Khởi động lại Windows Update", "Khắc phục tình trạng cập nhật bị treo hoặc đứng hình", 320, 132, btnW, btnH);
-            btnResetWu.Click += ResetWindowsUpdateService;
-
-            page.Controls.Add(btnRunSfc);
-            page.Controls.Add(btnRunDism);
-            page.Controls.Add(btnResetNet);
-            page.Controls.Add(btnCleanTemp);
-            page.Controls.Add(btnResetWu);
-
-            Label lblLogHeader = new Label();
-            lblLogHeader.Text = "Nhật ký tiến trình thực thi lệnh:";
-            lblLogHeader.Location = new Point(24, 215);
-            lblLogHeader.AutoSize = true;
-            lblLogHeader.Font = new Font("Segoe UI", 9.2f, FontStyle.Bold);
-            page.Controls.Add(lblLogHeader);
-
-            txtFixLog = new TextBox();
-            txtFixLog.Location = new Point(24, 240);
-            txtFixLog.Size = new Size(872, 315);
-            txtFixLog.Multiline = true;
-            txtFixLog.ScrollBars = ScrollBars.Vertical;
-            txtFixLog.ReadOnly = true;
-            txtFixLog.BackColor = CardBg;
-            txtFixLog.Font = new Font("Consolas", 9.2f);
-            page.Controls.Add(txtFixLog);
         }
 
         // ================================================================
@@ -1832,157 +1765,6 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  LOGIC: SỬA LỖI & TỐI ƯU HỆ THỐNG
-        // ================================================================
-        private void RunCmdTool(string exe, string args, string toolName)
-        {
-            AppendFixLog(string.Format("=== Bắt đầu chạy: {0} ===", toolName));
-            Task.Run(new Action(delegate()
-            {
-                try
-                {
-                    var psi = new ProcessStartInfo(exe, args);
-                    psi.UseShellExecute = false;
-                    psi.RedirectStandardOutput = true;
-                    psi.RedirectStandardError = true;
-                    psi.CreateNoWindow = true;
-
-                    var p = Process.Start(psi);
-                    while (!p.StandardOutput.EndOfStream)
-                    {
-                        string line = p.StandardOutput.ReadLine();
-                        if (!string.IsNullOrEmpty(line)) AppendFixLog(line);
-                    }
-                    p.WaitForExit();
-                    AppendFixLog(string.Format("=== Hoàn tất {0} (Mã thoát: {1}) ===\r\n", toolName, p.ExitCode));
-                }
-                catch (Exception ex)
-                {
-                    AppendFixLog("Lỗi: " + ex.Message);
-                }
-            }));
-        }
-
-        private void ResetNetwork(object sender, EventArgs e)
-        {
-            AppendFixLog("=== Bắt đầu khôi phục cài đặt mạng (Reset Network) ===");
-            Task.Run(new Action(delegate()
-            {
-                try
-                {
-                    var p1 = Process.Start(new ProcessStartInfo("netsh", "winsock reset") { UseShellExecute = false, CreateNoWindow = true });
-                    p1.WaitForExit();
-                    AppendFixLog("Đã thiết lập lại Winsock Catalog.");
-
-                    var p2 = Process.Start(new ProcessStartInfo("netsh", "int ip reset") { UseShellExecute = false, CreateNoWindow = true });
-                    p2.WaitForExit();
-                    AppendFixLog("Đã thiết lập lại giao thức TCP/IP.");
-
-                    var p3 = Process.Start(new ProcessStartInfo("ipconfig", "/flushdns") { UseShellExecute = false, CreateNoWindow = true });
-                    p3.WaitForExit();
-                    AppendFixLog("Đã xóa sạch bộ nhớ đệm DNS Cache.");
-
-                    AppendFixLog("=== Khôi phục mạng thành công! Cần khởi động lại máy để có hiệu lực. ===\r\n");
-                    SafeInvoke(delegate()
-                    {
-                        if (MessageBox.Show("Khôi phục mạng thành công!\nBạn có muốn khởi động lại máy tính ngay để áp dụng?",
-                            "Thông báo", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                        {
-                            Process.Start("shutdown.exe", "/r /t 5 /c \"Khởi động lại sau khi reset mạng.\"");
-                        }
-                    });
-                }
-                catch (Exception ex) { AppendFixLog("Lỗi: " + ex.Message); }
-            }));
-        }
-
-        private void CleanTempFiles(object sender, EventArgs e)
-        {
-            AppendFixLog("=== Bắt đầu dọn dẹp các tệp tin rác tạm thời ===");
-            Task.Run(new Action(delegate()
-            {
-                long cleaned = 0;
-                string[] tempFolders = {
-                    Path.GetTempPath(),
-                    @"C:\Windows\Temp",
-                    @"C:\Windows\Prefetch"
-                };
-
-                foreach (var folder in tempFolders)
-                {
-                    if (!Directory.Exists(folder)) continue;
-                    try
-                    {
-                        var dir = new DirectoryInfo(folder);
-                        foreach (var f in dir.GetFiles())
-                        {
-                            try { long s = f.Length; f.Delete(); cleaned += s; } catch { }
-                        }
-                        foreach (var sub in dir.GetDirectories())
-                        {
-                            try { sub.Delete(true); } catch { }
-                        }
-                    }
-                    catch { }
-                }
-
-                double mb = Math.Round((double)cleaned / (1024 * 1024), 1);
-                AppendFixLog(string.Format("Đã dọn dẹp và giải phóng khoảng {0} MB dung lượng ổ C!\r\n", mb));
-                SafeInvoke(delegate()
-                {
-                    MessageBox.Show(string.Format("Đã dọn dẹp xong!\nGiải phóng khoảng {0} MB dung lượng ổ C.", mb),
-                        "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                });
-            }));
-        }
-
-        private void ResetWindowsUpdateService(object sender, EventArgs e)
-        {
-            AppendFixLog("=== Đang khởi động lại dịch vụ Windows Update ===");
-            Task.Run(new Action(delegate()
-            {
-                try
-                {
-                    var p1 = Process.Start(new ProcessStartInfo("net", "stop wuauserv") { UseShellExecute = false, CreateNoWindow = true });
-                    p1.WaitForExit();
-
-                    string sDist = @"C:\Windows\SoftwareDistribution\Download";
-                    if (Directory.Exists(sDist))
-                    {
-                        try
-                        {
-                            foreach (var f in Directory.GetFiles(sDist)) { try { File.Delete(f); } catch { } }
-                            AppendFixLog("Đã xóa bộ nhớ đệm các gói tải về bị kẹt.");
-                        }
-                        catch { }
-                    }
-
-                    var p2 = Process.Start(new ProcessStartInfo("net", "start wuauserv") { UseShellExecute = false, CreateNoWindow = true });
-                    p2.WaitForExit();
-
-                    AppendFixLog("=== Đã khởi động lại dịch vụ Windows Update thành công! ===\r\n");
-                    SafeInvoke(delegate()
-                    {
-                        MessageBox.Show("Đã làm mới dịch vụ Windows Update thành công!", "Thành công",
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    });
-                }
-                catch (Exception ex) { AppendFixLog("Lỗi: " + ex.Message); }
-            }));
-        }
-
-        private void AppendFixLog(string msg)
-        {
-            SafeInvoke(delegate()
-            {
-                if (txtFixLog != null)
-                {
-                    txtFixLog.AppendText(string.Format("[{0:HH:mm:ss}] {1}\r\n", DateTime.Now, msg));
-                }
-            });
-        }
-
-        // ================================================================
         //  CÁC HÀM TIỆN ÍCH GIAO DIỆN
         // ================================================================
         private Panel CreateCardPanel(int x, int y, int w, int h)
@@ -2023,23 +1805,6 @@ namespace DriverChecker
             btn.Cursor = Cursors.Hand;
             btn.Font = new Font("Segoe UI", 9.2f, bold ? FontStyle.Bold : FontStyle.Regular);
             btn.FlatAppearance.BorderSize = 0;
-            return btn;
-        }
-
-        private Button CreateToolButton(string title, string subtitle, int x, int y, int w, int h)
-        {
-            var btn = new Button();
-            btn.Location = new Point(x, y);
-            btn.Size = new Size(w, h);
-            btn.BackColor = CardBg;
-            btn.FlatStyle = FlatStyle.Flat;
-            btn.FlatAppearance.BorderColor = CardBorder;
-            btn.Cursor = Cursors.Hand;
-            btn.TextAlign = ContentAlignment.TopLeft;
-            btn.Padding = new Padding(12, 10, 12, 10);
-            btn.Text = string.Format("{0}\n{1}", title, subtitle);
-            btn.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            btn.ForeColor = TextPrimary;
             return btn;
         }
 
