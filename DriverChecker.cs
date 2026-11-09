@@ -19,6 +19,7 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -115,7 +116,7 @@ namespace DriverChecker
         }
     }
 
-    // ======== Model ứng dụng Winget ========
+    // ======== Model ứng dụng Winget & Tải trực tiếp ========
     public class WingetApp
     {
         public string Name;
@@ -123,6 +124,7 @@ namespace DriverChecker
         public string Category;
         public string Description;
         public bool IsRecommended;
+        public string DownloadUrl;
 
         public WingetApp(string name, string id, string cat, string desc, bool rec)
         {
@@ -131,6 +133,17 @@ namespace DriverChecker
             Category = cat;
             Description = desc;
             IsRecommended = rec;
+            DownloadUrl = "";
+        }
+
+        public WingetApp(string name, string id, string cat, string desc, bool rec, string downloadUrl)
+        {
+            Name = name;
+            PackageId = id;
+            Category = cat;
+            Description = desc;
+            IsRecommended = rec;
+            DownloadUrl = downloadUrl ?? "";
         }
     }
 
@@ -1415,6 +1428,7 @@ namespace DriverChecker
             appList.Add(new WingetApp("7-Zip", "7zip.7zip", "Nén & Giải nén", "Phần mềm giải nén file siêu nhẹ, mở mọi định dạng", true));
             appList.Add(new WingetApp("Zalo", "VNG.Zalo", "Nhắn tin & Làm việc", "Ứng dụng nhắn tin và gửi file tài liệu số 1 Việt Nam", true));
             appList.Add(new WingetApp("UltraViewer", "UltraViewer.UltraViewer", "Điều khiển từ xa", "Hỗ trợ kết nối máy tính và trợ giúp từ xa dễ dàng", true));
+            appList.Add(new WingetApp("Malwarebytes Anti-Malware", "mbamupdates.com", "Bảo mật & Diệt virus", "Bảo vệ PC khỏi virus, mã độc & ransomware (Bản trực tiếp MBSetup 5.0)", true, "https://data-cdn.mbamupdates.com/web/mb5-setup-consumer/MBSetup.exe"));
             appList.Add(new WingetApp("VLC Media Player", "VideoLAN.VLC", "Xem phim & Nghe nhạc", "Trình phát mọi định dạng video, âm thanh không cần cài codec", false));
             appList.Add(new WingetApp("Notepad++", "Notepad++.Notepad++", "Soạn thảo văn bản", "Trình soạn thảo văn bản nhẹ, mở file cấu hình lớn", false));
             appList.Add(new WingetApp("Foxit PDF Reader", "Foxit.FoxitReader", "Đọc file PDF", "Phần mềm xem, in ấn và ghi chú trên file tài liệu PDF", false));
@@ -1962,7 +1976,7 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  LOGIC: CÀI ĐẶT ỨNG DỤNG QUA WINGET
+        //  LOGIC: CÀI ĐẶT ỨNG DỤNG (WINGET & TẢI TRỰC TIẾP)
         // ================================================================
         private async Task InstallSelectedAppsAsync()
         {
@@ -1978,7 +1992,7 @@ namespace DriverChecker
 
             if (selected.Count == 0)
             {
-                MessageBox.Show("Vui lòng tích chọn ít nhất 1 ứng dụng cần cài đặt!", "Thông báo");
+                MessageBox.Show("Vui lòng tích chọn ít nhất 1 ứng dụng cần cài đặt!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -1992,20 +2006,75 @@ namespace DriverChecker
 
             foreach (var app in selected)
             {
-                lblAppStatus.Text = string.Format("Đang tải & cài đặt: {0} ({1})...", app.Name, app.PackageId);
+                lblAppStatus.Text = string.Format("Đang xử lý: {0} ({1})...", app.Name, app.PackageId);
                 bool ok = await Task.Run(new Func<bool>(delegate()
                 {
                     try
                     {
-                        var psi = new ProcessStartInfo("winget",
-                            string.Format("install --id {0} -e --silent --accept-package-agreements --accept-source-agreements", app.PackageId));
-                        psi.UseShellExecute = false;
-                        psi.CreateNoWindow = true;
-                        var p = Process.Start(psi);
-                        p.WaitForExit();
-                        return (p.ExitCode == 0);
+                        // Trường hợp tải trực tiếp từ URL hãng (Ví dụ: Malwarebytes từ link mbamupdates.com)
+                        if (!string.IsNullOrEmpty(app.DownloadUrl))
+                        {
+                            SafeInvoke(delegate()
+                            {
+                                lblAppStatus.Text = string.Format("Đang tải {0} từ máy chủ chính thức...", app.Name);
+                            });
+
+                            string tempFile = Path.Combine(Path.GetTempPath(), "MBSetup-1.1.exe");
+                            try
+                            {
+                                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
+                                using (var wc = new WebClient())
+                                {
+                                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                                    wc.DownloadFile(app.DownloadUrl, tempFile);
+                                }
+                            }
+                            catch (Exception dlEx)
+                            {
+                                Logger.Log("Lỗi tải app " + app.Name + ": " + dlEx.Message);
+                                return false;
+                            }
+
+                            SafeInvoke(delegate()
+                            {
+                                lblAppStatus.Text = string.Format("Đang chạy cài đặt {0}...", app.Name);
+                            });
+
+                            try
+                            {
+                                var psi = new ProcessStartInfo(tempFile);
+                                psi.Arguments = "/silent /norestart";
+                                psi.UseShellExecute = true;
+                                var p = Process.Start(psi);
+                                if (p != null)
+                                {
+                                    p.WaitForExit();
+                                    return (p.ExitCode == 0 || p.ExitCode == 3010);
+                                }
+                                return true;
+                            }
+                            catch (Exception runEx)
+                            {
+                                Logger.Log("Lỗi chạy installer " + app.Name + ": " + runEx.Message);
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            var psi = new ProcessStartInfo("winget",
+                                string.Format("install --id {0} -e --silent --accept-package-agreements --accept-source-agreements", app.PackageId));
+                            psi.UseShellExecute = false;
+                            psi.CreateNoWindow = true;
+                            var p = Process.Start(psi);
+                            p.WaitForExit();
+                            return (p.ExitCode == 0);
+                        }
                     }
-                    catch { return false; }
+                    catch (Exception ex)
+                    {
+                        Logger.Log("Lỗi cài đặt app " + app.Name + ": " + ex.Message);
+                        return false;
+                    }
                 }));
 
                 if (ok) success++; else failed++;
