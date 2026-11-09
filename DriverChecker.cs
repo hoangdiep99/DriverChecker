@@ -1,12 +1,14 @@
 // ================================================================
 // DRIVER CHECKER & PC MANAGER v2.0
-// Giao dien phong cach Windows 11 Fluent Dashboard
-// - Bang dieu khien thong tin PC (Specs, CPU/RAM/Disk live gauges)
-// - Quan ly & Cap nhat Driver Microsoft + Link tai truc tiep GPU
-// - Sao luu & Khoi phuc Driver OEM khong can mang
-// - Cai dat ung dung thiet yeu 1-click qua Winget
-// - Sua loi Windows (SFC, DISM, Reset Network, Don rac Temp)
-// Tuong thich C# 5 / .NET Framework 4.8
+// Giao diện phong cách Windows 11 Fluent Dashboard
+// Tiếng Việt 100% chuẩn xác, dễ hiểu, không lỗi font
+// - Bảng điều khiển thông số máy tính chi tiết
+// - 3 Đồng hồ tròn hiệu năng thời gian thực (CPU, RAM, Ổ đĩa C)
+// - Kiểm tra, cập nhật driver Microsoft & Tải driver GPU từ hãng
+// - Sao lưu & Khôi phục driver OEM offline qua USB (Không cần mạng)
+// - Cài đặt ứng dụng thiết yếu 1-Click qua Microsoft Winget
+// - Bộ công cụ sửa lỗi Windows (SFC, DISM, Reset mạng, Dọn rác)
+// Tương thích C# 5 / .NET Framework 4.8
 // ================================================================
 
 using System;
@@ -24,7 +26,7 @@ using System.Windows.Forms;
 
 namespace DriverChecker
 {
-    // ======== Logger ========
+    // ======== Ghi nhật ký hệ thống ========
     public static class Logger
     {
         private static string _logPath;
@@ -36,9 +38,9 @@ namespace DriverChecker
             if (string.IsNullOrEmpty(dir)) dir = AppDomain.CurrentDomain.BaseDirectory;
             _logPath = Path.Combine(dir, "DriverChecker.log");
             Log("========================================");
-            Log("Driver & PC Manager v2.0 started");
-            Log(string.Format("OS: {0}", Environment.OSVersion));
-            Log(string.Format("Machine: {0}", Environment.MachineName));
+            Log("Driver Checker & PC Manager v2.0 khởi động");
+            Log(string.Format("Hệ điều hành: {0}", Environment.OSVersion));
+            Log(string.Format("Tên máy: {0}", Environment.MachineName));
             Log("========================================");
         }
 
@@ -59,7 +61,7 @@ namespace DriverChecker
         public static string LogPath { get { return _logPath; } }
     }
 
-    // ======== Model thiet bi driver ========
+    // ======== Model thiết bị phần cứng ========
     public class HardwareDevice
     {
         public string DeviceName;
@@ -82,7 +84,7 @@ namespace DriverChecker
             CurrentVersion = "";
             DriverDate = "";
             HardwareID = "";
-            Status = "\u2705 Da moi nhat";
+            Status = "Đã mới nhất";
             StatusColor = Color.FromArgb(22, 163, 74);
             AvailableUpdate = null;
             UpdateTitle = "";
@@ -90,7 +92,7 @@ namespace DriverChecker
         }
     }
 
-    // ======== Model App Winget ========
+    // ======== Model ứng dụng Winget ========
     public class WingetApp
     {
         public string Name;
@@ -109,10 +111,10 @@ namespace DriverChecker
         }
     }
 
-    // ======== Form chinh ========
+    // ======== Cửa sổ chính của chương trình ========
     public class MainForm : Form
     {
-        // Colors Windows 11 Fluent
+        // Bảng màu chuẩn phong cách Windows 11 Fluent
         private static readonly Color BgColor = Color.FromArgb(248, 250, 252);
         private static readonly Color CardBg = Color.White;
         private static readonly Color CardBorder = Color.FromArgb(226, 232, 240);
@@ -122,12 +124,12 @@ namespace DriverChecker
         private static readonly Color SidebarBg = Color.FromArgb(241, 245, 249);
         private static readonly Color SidebarActive = Color.FromArgb(224, 231, 255);
 
-        // Sidebar buttons
+        // Nút bấm thanh điều hướng và các trang nội dung
         private Button[] navButtons;
         private Panel[] contentPages;
         private int currentPageIndex = 0;
 
-        // --- View 1: Dashboard controls ---
+        // --- Trang 1: Bảng điều khiển ---
         private Label lblPcName;
         private Label lblOsInfo;
         private Label lblCpuInfo;
@@ -141,7 +143,7 @@ namespace DriverChecker
         private string gpuVendor = "";
         private string gpuDirectUrl = "";
 
-        // Gauges
+        // 3 Đồng hồ tròn hiệu năng
         private Panel pnlGaugeCpu;
         private Panel pnlGaugeRam;
         private Panel pnlGaugeDisk;
@@ -153,13 +155,13 @@ namespace DriverChecker
         private string diskSubtext = "";
         private Timer gaugeTimer;
 
-        // Health items
+        // Tình trạng hệ thống
         private Label lblHealthActivation;
         private Label lblHealthSecureBoot;
         private Label lblHealthDefender;
         private Label lblHealthRestore;
 
-        // --- View 2: Driver Scanner controls ---
+        // --- Trang 2: Quét & Cập nhật Driver ---
         private ListView lvDevices;
         private Button btnScanDrivers;
         private Button btnUpdateDrivers;
@@ -171,10 +173,12 @@ namespace DriverChecker
         private ProgressBar prgDriver;
         private Label lblDriverStatus;
         private Panel pnlGpuBanner;
+        private Button btnBannerDownload;
+        private Label lblGpuBannerText;
         private List<HardwareDevice> deviceList = new List<HardwareDevice>();
         private int updatesAvailable = 0;
 
-        // --- View 3: Backup/Restore controls ---
+        // --- Trang 3: Sao lưu & Khôi phục ---
         private TextBox txtBackupPath;
         private TextBox txtRestorePath;
         private Button btnStartBackup;
@@ -182,7 +186,7 @@ namespace DriverChecker
         private ListView lvBackupLog;
         private Label lblBackupResult;
 
-        // --- View 4: App Installer controls ---
+        // --- Trang 4: Cài đặt ứng dụng ---
         private ListView lvApps;
         private Button btnInstallApps;
         private Button btnSelectRecApps;
@@ -191,7 +195,7 @@ namespace DriverChecker
         private Label lblAppStatus;
         private List<WingetApp> appList = new List<WingetApp>();
 
-        // --- View 5: Fix & Optimize controls ---
+        // --- Trang 5: Sửa lỗi & Tối ưu ---
         private Button btnRunSfc;
         private Button btnRunDism;
         private Button btnResetNet;
@@ -199,31 +203,31 @@ namespace DriverChecker
         private Button btnResetWu;
         private TextBox txtFixLog;
 
-        // Category Map for Drivers
+        // Bảng phân loại phần cứng chuẩn Tiếng Việt
         private static readonly Dictionary<string, string> CategoryNames = InitCategoryNames();
 
         private static Dictionary<string, string> InitCategoryNames()
         {
             var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            d["DISPLAY"] = "\U0001F5A5 Card do hoa";
-            d["NET"] = "\U0001F310 Card mang";
-            d["MEDIA"] = "\U0001F50A Am thanh";
-            d["BLUETOOTH"] = "\U0001F4F6 Bluetooth";
-            d["SYSTEM"] = "\u2699 He thong";
-            d["HDC"] = "\U0001F4BE Bo dieu khien dia";
-            d["SCSIADAPTER"] = "\U0001F4BF Bo dieu khien SCSI";
-            d["USB"] = "\U0001F50C USB";
-            d["HIDCLASS"] = "\U0001F5B1 Thiet bi nhap";
-            d["FIRMWARE"] = "\U0001F527 Firmware";
-            d["PROCESSOR"] = "\U0001F9E0 Bo xu ly";
-            d["BATTERY"] = "\U0001F50B Pin";
-            d["CAMERA"] = "\U0001F4F7 Camera";
-            d["IMAGE"] = "\U0001F4F7 Hinh anh";
-            d["MONITOR"] = "\U0001F5A5 Man hinh";
-            d["PRINTQUEUE"] = "\U0001F5A8 May in";
-            d["BIOMETRIC"] = "\U0001F510 Sinh trac hoc";
-            d["SENSOR"] = "\U0001F4E1 Cam bien";
-            d["SOFTWAREDEVICE"] = "\U0001F4E6 Thiet bi ao";
+            d["DISPLAY"] = "Card màn hình";
+            d["NET"] = "Card mạng & Wi-Fi";
+            d["MEDIA"] = "Thiết bị âm thanh";
+            d["BLUETOOTH"] = "Kết nối Bluetooth";
+            d["SYSTEM"] = "Hệ thống & Chipset";
+            d["HDC"] = "Bộ điều khiển ổ đĩa";
+            d["SCSIADAPTER"] = "Bộ điều khiển SCSI";
+            d["USB"] = "Cổng cắm USB";
+            d["HIDCLASS"] = "Chuột & Bàn phím";
+            d["FIRMWARE"] = "Firmware bo mạch";
+            d["PROCESSOR"] = "Bộ vi xử lý (CPU)";
+            d["BATTERY"] = "Pin & Nguồn điện";
+            d["CAMERA"] = "Camera & Webcam";
+            d["IMAGE"] = "Thiết bị chụp hình";
+            d["MONITOR"] = "Màn hình hiển thị";
+            d["PRINTQUEUE"] = "Máy in & Máy quét";
+            d["BIOMETRIC"] = "Sinh trắc học & Vân tay";
+            d["SENSOR"] = "Cảm biến phần cứng";
+            d["SOFTWAREDEVICE"] = "Thiết bị phần mềm";
             return d;
         }
 
@@ -242,7 +246,7 @@ namespace DriverChecker
             }
 
             Application.Run(new MainForm());
-            Logger.Log("Application closed.");
+            Logger.Log("Ứng dụng đã đóng.");
         }
 
         private static bool HandleCommandLine(string[] args)
@@ -288,13 +292,13 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  KHOI TAO GIAO DIEN TONG THE
+        //  KHỞI TẠO BỐ CỤC GIAO DIỆN CHÍNH
         // ================================================================
         private void InitUI()
         {
-            this.Text = "Driver Checker & PC Manager v2.0 - Bang Dieu Khien Windows 11";
+            this.Text = "Driver Checker & PC Manager v2.0 - Bảng Điều Khiển Hệ Thống";
             this.Size = new Size(1180, 750);
-            this.MinimumSize = new Size(980, 620);
+            this.MinimumSize = new Size(1000, 640);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Font = new Font("Segoe UI", 9.5f);
             this.BackColor = BgColor;
@@ -305,7 +309,7 @@ namespace DriverChecker
             }
             catch { }
 
-            // === 1. SIDEBAR BEN TRAI ===
+            // === 1. THANH ĐIỀU HƯỚNG BÊN TRÁI (SIDEBAR) ===
             Panel sidebar = new Panel();
             sidebar.Dock = DockStyle.Left;
             sidebar.Width = 220;
@@ -317,35 +321,33 @@ namespace DriverChecker
                     e.Graphics.DrawLine(pen, sidebar.Width - 1, 0, sidebar.Width - 1, sidebar.Height);
             };
 
-            // Logo & Title in Sidebar
             Label lblAppLogo = new Label();
-            lblAppLogo.Text = "\U0001F50D Driver Checker";
-            lblAppLogo.Font = new Font("Segoe UI", 13.5f, FontStyle.Bold);
+            lblAppLogo.Text = "Driver Checker";
+            lblAppLogo.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
             lblAppLogo.ForeColor = TextPrimary;
-            lblAppLogo.Location = new Point(15, 10);
+            lblAppLogo.Location = new Point(16, 12);
             lblAppLogo.AutoSize = true;
 
             Label lblAppSub = new Label();
-            lblAppSub.Text = "PC & Driver Manager v2.0";
-            lblAppSub.Font = new Font("Segoe UI", 8.2f);
+            lblAppSub.Text = "Quản lý & Cứu hộ PC v2.0";
+            lblAppSub.Font = new Font("Segoe UI", 8.8f);
             lblAppSub.ForeColor = TextSecondary;
-            lblAppSub.Location = new Point(17, 36);
+            lblAppSub.Location = new Point(18, 38);
             lblAppSub.AutoSize = true;
 
             sidebar.Controls.Add(lblAppLogo);
             sidebar.Controls.Add(lblAppSub);
 
-            // Nav buttons
             string[] navTitles = {
-                "\U0001F3E0  Bang dieu khien",
-                "\U0001F504  Driver & Cap nhat",
-                "\U0001F4BE  Sao luu & Khoi phuc",
-                "\U0001F4E6  Cai App thiet yeu",
-                "\U0001F6E0  Sua loi & Toi uu"
+                "  Bảng điều khiển",
+                "  Kiểm tra Driver",
+                "  Sao lưu & Khôi phục",
+                "  Cài đặt ứng dụng",
+                "  Sửa lỗi & Tối ưu"
             };
 
             navButtons = new Button[navTitles.Length];
-            int btnY = 75;
+            int btnY = 80;
             for (int i = 0; i < navTitles.Length; i++)
             {
                 int idx = i;
@@ -355,9 +357,9 @@ namespace DriverChecker
                 btn.Size = new Size(204, 42);
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
-                btn.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+                btn.Font = new Font("Segoe UI", 9.8f, FontStyle.Regular);
                 btn.TextAlign = ContentAlignment.MiddleLeft;
-                btn.Padding = new Padding(10, 0, 0, 0);
+                btn.Padding = new Padding(12, 0, 0, 0);
                 btn.Cursor = Cursors.Hand;
                 btn.BackColor = (i == 0) ? SidebarActive : Color.Transparent;
                 btn.ForeColor = (i == 0) ? PrimaryColor : TextPrimary;
@@ -368,29 +370,27 @@ namespace DriverChecker
                 btnY += 46;
             }
 
-            // Bottom log button in sidebar
             Button btnLog = new Button();
-            btnLog.Text = "\U0001F4CB Xem File Log";
+            btnLog.Text = "Xem nhật ký Log";
             btnLog.Location = new Point(8, sidebar.Height - 50);
             btnLog.Size = new Size(204, 34);
             btnLog.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnLog.FlatStyle = FlatStyle.Flat;
             btnLog.FlatAppearance.BorderColor = CardBorder;
-            btnLog.Font = new Font("Segoe UI", 8.5f);
+            btnLog.Font = new Font("Segoe UI", 8.8f);
             btnLog.Cursor = Cursors.Hand;
             btnLog.Click += delegate(object s, EventArgs e)
             {
                 if (File.Exists(Logger.LogPath)) Process.Start("notepad.exe", Logger.LogPath);
-                else MessageBox.Show("Chua co file log.", "Thong bao");
+                else MessageBox.Show("Chưa có file nhật ký log nào.", "Thông báo");
             };
             sidebar.Controls.Add(btnLog);
 
-            // === 2. MAIN CONTENT AREA ===
+            // === 2. KHU VỰC HIỂN THỊ NỘI DUNG (MAIN CONTENT) ===
             Panel mainContainer = new Panel();
             mainContainer.Dock = DockStyle.Fill;
             mainContainer.BackColor = BgColor;
 
-            // Tao 5 Content Pages
             contentPages = new Panel[5];
             for (int i = 0; i < 5; i++)
             {
@@ -400,7 +400,6 @@ namespace DriverChecker
                 mainContainer.Controls.Add(contentPages[i]);
             }
 
-            // Xay dung tung trang
             BuildDashboardPage(contentPages[0]);
             BuildDriverPage(contentPages[1]);
             BuildBackupPage(contentPages[2]);
@@ -410,13 +409,12 @@ namespace DriverChecker
             this.Controls.Add(mainContainer);
             this.Controls.Add(sidebar);
 
-            // Timer do live CPU/RAM/Disk moi 2 giay
+            // Đo tải CPU/RAM/Ổ cứng mỗi 2 giây
             gaugeTimer = new Timer();
             gaugeTimer.Interval = 2000;
             gaugeTimer.Tick += delegate(object s, EventArgs e) { RefreshGauges(); };
             gaugeTimer.Start();
 
-            // Load du lieu Dashboard ngay sau khi hien thi
             this.Shown += delegate(object s, EventArgs e)
             {
                 LoadDashboardSpecs();
@@ -430,16 +428,15 @@ namespace DriverChecker
 
             navButtons[currentPageIndex].BackColor = Color.Transparent;
             navButtons[currentPageIndex].ForeColor = TextPrimary;
-            navButtons[currentPageIndex].Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            navButtons[currentPageIndex].Font = new Font("Segoe UI", 9.8f, FontStyle.Regular);
             contentPages[currentPageIndex].Visible = false;
 
             currentPageIndex = index;
             navButtons[currentPageIndex].BackColor = SidebarActive;
             navButtons[currentPageIndex].ForeColor = PrimaryColor;
-            navButtons[currentPageIndex].Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            navButtons[currentPageIndex].Font = new Font("Segoe UI", 9.8f, FontStyle.Bold);
             contentPages[currentPageIndex].Visible = true;
 
-            // Neu chuyen sang Driver Page lan dau ma chua quet, tu dong quet
             if (index == 1 && deviceList.Count == 0)
             {
                 Task.Run(async delegate() { await RunFullScanAsync(); });
@@ -447,24 +444,23 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  VIEW 1: BANG DIEU KHIEN (DASHBOARD GIONG FIXYFIER)
+        //  TRANG 1: BẢNG ĐIỀU KHIỂN (DASHBOARD)
         // ================================================================
         private void BuildDashboardPage(Panel page)
         {
             page.AutoScroll = true;
             page.Padding = new Padding(24, 20, 24, 20);
 
-            // Title
             Label lblHeader = new Label();
-            lblHeader.Text = "B\u1EA3ng \u0111i\u1EC1u khi\u1EC3n";
+            lblHeader.Text = "Bảng điều khiển hệ thống";
             lblHeader.Font = new Font("Segoe UI", 16f, FontStyle.Bold);
             lblHeader.ForeColor = TextPrimary;
             lblHeader.Location = new Point(24, 15);
             lblHeader.AutoSize = true;
             page.Controls.Add(lblHeader);
 
-            // --- 1. CARD THONG SO MAY TINH (SPECS CARD) ---
-            Panel cardSpecs = CreateCardPanel(24, 52, 880, 160);
+            // --- 1. THẺ THÔNG TIN MÁY TÍNH ---
+            Panel cardSpecs = CreateCardPanel(24, 52, 900, 160);
 
             lblPcName = new Label();
             lblPcName.Text = Environment.MachineName;
@@ -474,32 +470,33 @@ namespace DriverChecker
             lblPcName.AutoSize = true;
 
             btnCopySpecs = new Button();
-            btnCopySpecs.Text = "\U0001F4CB Sao chep";
-            btnCopySpecs.Location = new Point(765, 14);
-            btnCopySpecs.Size = new Size(95, 30);
+            btnCopySpecs.Text = "Sao chép thông tin";
+            btnCopySpecs.Location = new Point(735, 14);
+            btnCopySpecs.Size = new Size(145, 32);
             btnCopySpecs.FlatStyle = FlatStyle.Flat;
             btnCopySpecs.FlatAppearance.BorderColor = CardBorder;
-            btnCopySpecs.Font = new Font("Segoe UI", 8.5f);
+            btnCopySpecs.Font = new Font("Segoe UI", 9f);
             btnCopySpecs.Cursor = Cursors.Hand;
             btnCopySpecs.Click += CopySpecsToClipboard;
 
-            lblOsInfo = CreateSpecsLabel("He dieu hanh:", "Dang tai...", 18, 48);
-            lblCpuInfo = CreateSpecsLabel("Bo xu ly:", "Dang tai...", 18, 72);
-            lblGpuInfo = CreateSpecsLabel("Card do hoa:", "Dang tai...", 18, 96);
-            lblRamInfo = CreateSpecsLabel("Bo nho RAM:", "Dang tai...", 480, 48);
-            lblMainboardInfo = CreateSpecsLabel("Bo mach chu:", "Dang tai...", 480, 72);
-            lblUptime = CreateSpecsLabel("Thoi gian chay:", "Dang tai...", 480, 96);
-            lblInstallDate = CreateSpecsLabel("Ngay cai Win:", "Dang tai...", 18, 120);
+            lblOsInfo = CreateSpecsLabel("Hệ điều hành:", "Đang nạp...", 18, 48);
+            lblCpuInfo = CreateSpecsLabel("Bộ vi xử lý:", "Đang nạp...", 18, 72);
+            lblGpuInfo = CreateSpecsLabel("Card màn hình:", "Đang nạp...", 18, 96);
+            lblInstallDate = CreateSpecsLabel("Ngày cài Windows:", "Đang nạp...", 18, 120);
+
+            lblRamInfo = CreateSpecsLabel("Bộ nhớ RAM:", "Đang nạp...", 470, 48);
+            lblMainboardInfo = CreateSpecsLabel("Bo mạch chủ:", "Đang nạp...", 470, 72);
+            lblUptime = CreateSpecsLabel("Thời gian mở máy:", "Đang nạp...", 470, 96);
 
             btnGpuDirectLink = new Button();
-            btnGpuDirectLink.Text = "\U0001F310 Tai tu Hang";
-            btnGpuDirectLink.Location = new Point(765, 92);
-            btnGpuDirectLink.Size = new Size(95, 30);
+            btnGpuDirectLink.Text = "Tải từ NVIDIA.com";
+            btnGpuDirectLink.Location = new Point(735, 90);
+            btnGpuDirectLink.Size = new Size(145, 32);
             btnGpuDirectLink.FlatStyle = FlatStyle.Flat;
             btnGpuDirectLink.BackColor = Color.FromArgb(22, 163, 74);
             btnGpuDirectLink.ForeColor = Color.White;
             btnGpuDirectLink.FlatAppearance.BorderSize = 0;
-            btnGpuDirectLink.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            btnGpuDirectLink.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             btnGpuDirectLink.Cursor = Cursors.Hand;
             btnGpuDirectLink.Visible = false;
             btnGpuDirectLink.Click += delegate(object s, EventArgs e)
@@ -512,81 +509,78 @@ namespace DriverChecker
             cardSpecs.Controls.Add(lblOsInfo);
             cardSpecs.Controls.Add(lblCpuInfo);
             cardSpecs.Controls.Add(lblGpuInfo);
+            cardSpecs.Controls.Add(lblInstallDate);
             cardSpecs.Controls.Add(lblRamInfo);
             cardSpecs.Controls.Add(lblMainboardInfo);
             cardSpecs.Controls.Add(lblUptime);
-            cardSpecs.Controls.Add(lblInstallDate);
             cardSpecs.Controls.Add(btnGpuDirectLink);
             page.Controls.Add(cardSpecs);
 
-            // --- 2. BA DONG HO TRON HIEU NANG (GAUGES) ---
+            // --- 2. BA ĐỒNG HỒ TRÒN HIỆU NĂNG ---
             int gaugeY = 224;
-            int gaugeW = 280;
+            int gaugeW = 286;
             int gaugeH = 135;
 
-            // Gauge CPU
             pnlGaugeCpu = CreateCardPanel(24, gaugeY, gaugeW, gaugeH);
             pnlGaugeCpu.Paint += delegate(object s, PaintEventArgs e)
             {
-                DrawCircularGauge(e.Graphics, new Rectangle(15, 12, 105, 105), cpuPercent,
-                    "\u2699 Bo xu ly", cpuSubtext, Color.FromArgb(37, 99, 235));
+                DrawCircularGauge(e.Graphics, new Rectangle(15, 15, 100, 100), cpuPercent,
+                    "Bộ vi xử lý", cpuSubtext, Color.FromArgb(37, 99, 235));
             };
 
-            // Gauge RAM
-            pnlGaugeRam = CreateCardPanel(324, gaugeY, gaugeW, gaugeH);
+            pnlGaugeRam = CreateCardPanel(330, gaugeY, gaugeW, gaugeH);
             pnlGaugeRam.Paint += delegate(object s, PaintEventArgs e)
             {
-                DrawCircularGauge(e.Graphics, new Rectangle(15, 12, 105, 105), ramPercent,
-                    "\U0001F4BE Bo nho", ramSubtext, Color.FromArgb(14, 165, 233));
+                DrawCircularGauge(e.Graphics, new Rectangle(15, 15, 100, 100), ramPercent,
+                    "Bộ nhớ RAM", ramSubtext, Color.FromArgb(14, 165, 233));
             };
 
-            // Gauge Disk
-            pnlGaugeDisk = CreateCardPanel(624, gaugeY, gaugeW, gaugeH);
+            pnlGaugeDisk = CreateCardPanel(638, gaugeY, gaugeW, gaugeH);
             pnlGaugeDisk.Paint += delegate(object s, PaintEventArgs e)
             {
                 Color c = diskPercent > 85 ? Color.FromArgb(220, 38, 38) : Color.FromArgb(217, 119, 6);
-                DrawCircularGauge(e.Graphics, new Rectangle(15, 12, 105, 105), diskPercent,
-                    "\U0001F4BD O dia C:", diskSubtext, c);
+                DrawCircularGauge(e.Graphics, new Rectangle(15, 15, 100, 100), diskPercent,
+                    "Ổ cài Win (C:)", diskSubtext, c);
             };
 
             page.Controls.Add(pnlGaugeCpu);
             page.Controls.Add(pnlGaugeRam);
             page.Controls.Add(pnlGaugeDisk);
 
-            // --- 3. TINH TRANG HE THONG (SYSTEM HEALTH) ---
-            Panel cardHealth = CreateCardPanel(24, 372, 880, 200);
+            // --- 3. TÌNH TRẠNG SỨC KHỎE HỆ THỐNG ---
+            Panel cardHealth = CreateCardPanel(24, 372, 900, 200);
 
             Label lblHealthTitle = new Label();
-            lblHealthTitle.Text = "\U0001F6E1 Tinh trang he thong";
+            lblHealthTitle.Text = "Tình trạng an toàn & Bản quyền";
             lblHealthTitle.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
             lblHealthTitle.ForeColor = TextPrimary;
             lblHealthTitle.Location = new Point(18, 14);
             lblHealthTitle.AutoSize = true;
 
-            lblHealthActivation = CreateSpecsLabel("Kich hoat Windows:", "Kiem tra...", 18, 50);
-            lblHealthSecureBoot = CreateSpecsLabel("Khoi dong an toan (Secure Boot):", "Kiem tra...", 18, 80);
-            lblHealthDefender = CreateSpecsLabel("Bao ve thoi gian thuc:", "Kiem tra...", 18, 110);
-            lblHealthRestore = CreateSpecsLabel("Bao ve he thong (Restore Point):", "Kiem tra...", 18, 140);
+            lblHealthActivation = CreateSpecsLabel("Bản quyền Windows:", "Đang kiểm tra...", 18, 50);
+            lblHealthSecureBoot = CreateSpecsLabel("Khởi động an toàn (Secure Boot):", "Đang kiểm tra...", 18, 80);
+            lblHealthDefender = CreateSpecsLabel("Bảo vệ thời gian thực (Antivirus):", "Đang kiểm tra...", 18, 110);
+            lblHealthRestore = CreateSpecsLabel("Điểm khôi phục (Restore Point):", "Đang kiểm tra...", 18, 140);
 
             Button btnCreateRpNow = new Button();
-            btnCreateRpNow.Text = "+ Tao Restore Point ngay";
+            btnCreateRpNow.Text = "+ Tạo điểm khôi phục ngay";
             btnCreateRpNow.Location = new Point(680, 134);
-            btnCreateRpNow.Size = new Size(180, 32);
+            btnCreateRpNow.Size = new Size(200, 32);
             btnCreateRpNow.FlatStyle = FlatStyle.Flat;
             btnCreateRpNow.BackColor = PrimaryColor;
             btnCreateRpNow.ForeColor = Color.White;
             btnCreateRpNow.FlatAppearance.BorderSize = 0;
-            btnCreateRpNow.Font = new Font("Segoe UI", 8.8f, FontStyle.Bold);
+            btnCreateRpNow.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             btnCreateRpNow.Cursor = Cursors.Hand;
             btnCreateRpNow.Click += async delegate(object s, EventArgs e)
             {
                 btnCreateRpNow.Enabled = false;
-                btnCreateRpNow.Text = "Dang tao...";
+                btnCreateRpNow.Text = "Đang tạo...";
                 bool ok = await Task.Run(new Func<bool>(delegate() { return CreateRestorePoint(); }));
                 btnCreateRpNow.Enabled = true;
-                btnCreateRpNow.Text = "+ Tao Restore Point ngay";
-                if (ok) MessageBox.Show("Tao Restore Point thanh cong!", "Thanh cong");
-                else MessageBox.Show("Khong the tao Restore Point.", "Loi");
+                btnCreateRpNow.Text = "+ Tạo điểm khôi phục ngay";
+                if (ok) MessageBox.Show("Đã tạo điểm khôi phục hệ thống (Restore Point) thành công!", "Thông báo");
+                else MessageBox.Show("Không thể tạo Restore Point. Hãy đảm bảo System Restore đã được bật trên ổ C:.", "Lỗi");
             };
 
             cardHealth.Controls.Add(lblHealthTitle);
@@ -602,13 +596,11 @@ namespace DriverChecker
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Background circle
             using (var bgPen = new Pen(Color.FromArgb(241, 245, 249), 10))
             {
                 g.DrawArc(bgPen, bounds.X + 6, bounds.Y + 6, bounds.Width - 12, bounds.Height - 12, 0, 360);
             }
 
-            // Progress arc
             if (percent > 0)
             {
                 using (var prPen = new Pen(progColor, 10))
@@ -620,7 +612,6 @@ namespace DriverChecker
                 }
             }
 
-            // Percentage Text in center
             string pctStr = string.Format("{0}%", (int)percent);
             using (var font = new Font("Segoe UI", 14f, FontStyle.Bold))
             using (var brush = new SolidBrush(TextPrimary))
@@ -631,20 +622,19 @@ namespace DriverChecker
                 g.DrawString(pctStr, font, brush, new RectangleF(bounds.X, bounds.Y, bounds.Width, bounds.Height), sf);
             }
 
-            // Title & Subtext on the right
-            int textX = bounds.Right + 12;
+            int textX = bounds.Right + 14;
             using (var fontTitle = new Font("Segoe UI", 10.5f, FontStyle.Bold))
-            using (var fontSub = new Font("Segoe UI", 8.8f))
+            using (var fontSub = new Font("Segoe UI", 9f))
             using (var brushTitle = new SolidBrush(TextPrimary))
             using (var brushSub = new SolidBrush(TextSecondary))
             {
-                g.DrawString(title, fontTitle, brushTitle, textX, bounds.Y + 20);
-                g.DrawString(subtext, fontSub, brushSub, textX, bounds.Y + 46);
+                g.DrawString(title, fontTitle, brushTitle, textX, bounds.Y + 18);
+                g.DrawString(subtext, fontSub, brushSub, textX, bounds.Y + 45);
             }
         }
 
         // ================================================================
-        //  VIEW 2: DRIVER & CAP NHAT (WINDOWS UPDATE + GPU LINK)
+        //  TRANG 2: QUÉT & CẬP NHẬT DRIVER
         // ================================================================
         private void BuildDriverPage(Panel page)
         {
@@ -652,12 +642,12 @@ namespace DriverChecker
             topBar.Dock = DockStyle.Top;
             topBar.Height = 100;
             topBar.BackColor = CardBg;
-            topBar.Padding = new Padding(16, 10, 16, 8);
+            topBar.Padding = new Padding(16, 8, 16, 8);
 
-            // Banner GPU Direct Download
+            // Banner GPU
             pnlGpuBanner = new Panel();
             pnlGpuBanner.Dock = DockStyle.Top;
-            pnlGpuBanner.Height = 38;
+            pnlGpuBanner.Height = 40;
             pnlGpuBanner.BackColor = Color.FromArgb(236, 253, 245);
             pnlGpuBanner.Padding = new Padding(12, 6, 12, 6);
             pnlGpuBanner.Paint += delegate(object s, PaintEventArgs e)
@@ -666,22 +656,22 @@ namespace DriverChecker
                     e.Graphics.DrawRectangle(pen, 0, 0, pnlGpuBanner.Width - 1, pnlGpuBanner.Height - 1);
             };
 
-            Label lblGpuBannerText = new Label();
-            lblGpuBannerText.Text = "\u2705 Phat hien Card do hoa NVIDIA. Ban co the tai ban Game Ready Driver moi nhat tu website hang:";
-            lblGpuBannerText.Location = new Point(12, 9);
+            lblGpuBannerText = new Label();
+            lblGpuBannerText.Text = "Phát hiện Card đồ họa trên máy. Bạn có thể tải bản Driver mới nhất trực tiếp từ trang chủ hãng:";
+            lblGpuBannerText.Location = new Point(12, 10);
             lblGpuBannerText.AutoSize = true;
-            lblGpuBannerText.Font = new Font("Segoe UI", 9f);
+            lblGpuBannerText.Font = new Font("Segoe UI", 9.2f);
             lblGpuBannerText.ForeColor = Color.FromArgb(6, 95, 70);
 
-            Button btnBannerDownload = new Button();
-            btnBannerDownload.Text = "\U0001F310 Tai truc tiep tu NVIDIA";
-            btnBannerDownload.Location = new Point(680, 5);
-            btnBannerDownload.Size = new Size(185, 28);
+            btnBannerDownload = new Button();
+            btnBannerDownload.Text = "Tải trực tiếp từ NVIDIA.com";
+            btnBannerDownload.Location = new Point(670, 5);
+            btnBannerDownload.Size = new Size(205, 30);
             btnBannerDownload.FlatStyle = FlatStyle.Flat;
             btnBannerDownload.BackColor = Color.FromArgb(22, 163, 74);
             btnBannerDownload.ForeColor = Color.White;
             btnBannerDownload.FlatAppearance.BorderSize = 0;
-            btnBannerDownload.Font = new Font("Segoe UI", 8.8f, FontStyle.Bold);
+            btnBannerDownload.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             btnBannerDownload.Cursor = Cursors.Hand;
             btnBannerDownload.Click += delegate(object s, EventArgs e)
             {
@@ -692,46 +682,46 @@ namespace DriverChecker
             pnlGpuBanner.Controls.Add(lblGpuBannerText);
             pnlGpuBanner.Controls.Add(btnBannerDownload);
 
-            // Row buttons
+            // Hàng nút điều khiển
             Panel rowBtns = new Panel();
             rowBtns.Dock = DockStyle.Bottom;
             rowBtns.Height = 48;
             rowBtns.BackColor = CardBg;
 
-            btnScanDrivers = CreateButton("\U0001F50D  Quet & Kiem Tra", PrimaryColor, true);
+            btnScanDrivers = CreateButton("Quét & Kiểm tra", PrimaryColor, true);
             btnScanDrivers.Location = new Point(12, 6);
-            btnScanDrivers.Size = new Size(160, 36);
+            btnScanDrivers.Size = new Size(150, 36);
             btnScanDrivers.Click += async delegate(object s, EventArgs e) { await RunFullScanAsync(); };
 
-            btnUpdateDrivers = CreateButton("\u26A1  Cap Nhat Driver", Color.FromArgb(22, 163, 74), true);
-            btnUpdateDrivers.Location = new Point(180, 6);
-            btnUpdateDrivers.Size = new Size(160, 36);
+            btnUpdateDrivers = CreateButton("Cài đặt Driver", Color.FromArgb(22, 163, 74), true);
+            btnUpdateDrivers.Location = new Point(170, 6);
+            btnUpdateDrivers.Size = new Size(150, 36);
             btnUpdateDrivers.Enabled = false;
             btnUpdateDrivers.Click += async delegate(object s, EventArgs e) { await InstallSelectedAsync(); };
 
-            btnExportReport = CreateButton("\U0001F4C4  Xuat Bao Cao", Color.FromArgb(100, 116, 139), false);
-            btnExportReport.Location = new Point(348, 6);
-            btnExportReport.Size = new Size(130, 36);
+            btnExportReport = CreateButton("Xuất báo cáo", Color.FromArgb(100, 116, 139), false);
+            btnExportReport.Location = new Point(328, 6);
+            btnExportReport.Size = new Size(125, 36);
             btnExportReport.Click += ExportReport;
 
             chkRestorePoint = new CheckBox();
-            chkRestorePoint.Text = "\U0001F6E1 Tao Restore Point";
+            chkRestorePoint.Text = "Tự tạo Restore Point";
             chkRestorePoint.Checked = true;
-            chkRestorePoint.Location = new Point(490, 14);
+            chkRestorePoint.Location = new Point(465, 14);
             chkRestorePoint.AutoSize = true;
             chkRestorePoint.Font = new Font("Segoe UI", 9f);
             chkRestorePoint.ForeColor = TextSecondary;
 
             Label lblSearch = new Label();
-            lblSearch.Text = "Loc:";
-            lblSearch.Location = new Point(660, 15);
+            lblSearch.Text = "Tìm:";
+            lblSearch.Location = new Point(640, 15);
             lblSearch.AutoSize = true;
             lblSearch.Font = new Font("Segoe UI", 9f);
             lblSearch.ForeColor = TextSecondary;
 
             txtSearchDrivers = new TextBox();
             txtSearchDrivers.Font = new Font("Segoe UI", 9.5f);
-            txtSearchDrivers.Location = new Point(695, 11);
+            txtSearchDrivers.Location = new Point(675, 11);
             txtSearchDrivers.Size = new Size(130, 26);
             txtSearchDrivers.TextChanged += delegate(object s, EventArgs e)
             {
@@ -739,24 +729,24 @@ namespace DriverChecker
             };
 
             btnSelectAllDrivers = new Button();
-            btnSelectAllDrivers.Text = "Tat ca";
-            btnSelectAllDrivers.Size = new Size(54, 28);
-            btnSelectAllDrivers.Location = new Point(832, 10);
+            btnSelectAllDrivers.Text = "Chọn hết";
+            btnSelectAllDrivers.Size = new Size(72, 28);
+            btnSelectAllDrivers.Location = new Point(812, 10);
             btnSelectAllDrivers.FlatStyle = FlatStyle.Flat;
             btnSelectAllDrivers.FlatAppearance.BorderColor = CardBorder;
-            btnSelectAllDrivers.Font = new Font("Segoe UI", 8.5f);
+            btnSelectAllDrivers.Font = new Font("Segoe UI", 8.8f);
             btnSelectAllDrivers.Click += delegate(object s, EventArgs e)
             {
                 foreach (ListViewItem item in lvDevices.Items) item.Checked = true;
             };
 
             btnDeselectAllDrivers = new Button();
-            btnDeselectAllDrivers.Text = "Bo chon";
-            btnDeselectAllDrivers.Size = new Size(64, 28);
+            btnDeselectAllDrivers.Text = "Bỏ chọn";
+            btnDeselectAllDrivers.Size = new Size(72, 28);
             btnDeselectAllDrivers.Location = new Point(890, 10);
             btnDeselectAllDrivers.FlatStyle = FlatStyle.Flat;
             btnDeselectAllDrivers.FlatAppearance.BorderColor = CardBorder;
-            btnDeselectAllDrivers.Font = new Font("Segoe UI", 8.5f);
+            btnDeselectAllDrivers.Font = new Font("Segoe UI", 8.8f);
             btnDeselectAllDrivers.Click += delegate(object s, EventArgs e)
             {
                 foreach (ListViewItem item in lvDevices.Items) item.Checked = false;
@@ -774,7 +764,7 @@ namespace DriverChecker
             topBar.Controls.Add(rowBtns);
             topBar.Controls.Add(pnlGpuBanner);
 
-            // ListView
+            // Bảng danh sách thiết bị
             lvDevices = new ListView();
             lvDevices.Dock = DockStyle.Fill;
             lvDevices.View = View.Details;
@@ -786,15 +776,14 @@ namespace DriverChecker
             lvDevices.BorderStyle = BorderStyle.None;
 
             lvDevices.Columns.Add("", 35, HorizontalAlignment.Center);
-            lvDevices.Columns.Add("Phan loai", 140);
-            lvDevices.Columns.Add("Ten thiet bi", 250);
-            lvDevices.Columns.Add("Nha san xuat", 120);
-            lvDevices.Columns.Add("Version hien tai", 125);
-            lvDevices.Columns.Add("Version moi (MS)", 125);
-            lvDevices.Columns.Add("Ngay Driver", 95);
-            lvDevices.Columns.Add("Trang thai", 180);
+            lvDevices.Columns.Add("Loại phần cứng", 150);
+            lvDevices.Columns.Add("Tên thiết bị", 260);
+            lvDevices.Columns.Add("Nhà sản xuất", 130);
+            lvDevices.Columns.Add("Bản hiện tại", 125);
+            lvDevices.Columns.Add("Bản mới (Microsoft)", 135);
+            lvDevices.Columns.Add("Ngày phát hành", 100);
+            lvDevices.Columns.Add("Trạng thái", 180);
 
-            // Bottom status
             Panel btm = new Panel();
             btm.Dock = DockStyle.Bottom;
             btm.Height = 36;
@@ -802,17 +791,17 @@ namespace DriverChecker
             btm.Padding = new Padding(16, 6, 16, 6);
 
             lblDriverStatus = new Label();
-            lblDriverStatus.Text = "San sang. Bam \"Quet & Kiem Tra\" de bat dau...";
+            lblDriverStatus.Text = "Sẵn sàng. Bấm \"Quét & Kiểm tra\" để bắt đầu...";
             lblDriverStatus.Location = new Point(16, 8);
             lblDriverStatus.AutoSize = true;
             lblDriverStatus.ForeColor = TextSecondary;
 
             prgDriver = new ProgressBar();
-            prgDriver.Size = new Size(200, 18);
+            prgDriver.Size = new Size(220, 18);
             prgDriver.Anchor = AnchorStyles.Right | AnchorStyles.Top;
-            prgDriver.Location = new Point(btm.Width - 220, 8);
+            prgDriver.Location = new Point(btm.Width - 240, 8);
             prgDriver.Visible = false;
-            btm.Resize += delegate(object s, EventArgs e) { prgDriver.Location = new Point(btm.Width - 220, 8); };
+            btm.Resize += delegate(object s, EventArgs e) { prgDriver.Location = new Point(btm.Width - 240, 8); };
 
             btm.Controls.Add(lblDriverStatus);
             btm.Controls.Add(prgDriver);
@@ -823,31 +812,31 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  VIEW 3: SAO LUU & KHOI PHUC
+        //  TRANG 3: SAO LƯU & KHÔI PHỤC (OFFLINE)
         // ================================================================
         private void BuildBackupPage(Panel page)
         {
             page.Padding = new Padding(24, 20, 24, 20);
 
             Label lblBkTitle = new Label();
-            lblBkTitle.Text = "Sao l\u01B0u & Kh\u00F4i ph\u1EE5c Driver (Offline kh\u00F4ng c\u1EA7n m\u1EA1ng)";
+            lblBkTitle.Text = "Sao lưu & Khôi phục Driver (Offline không cần mạng)";
             lblBkTitle.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
             lblBkTitle.ForeColor = TextPrimary;
             lblBkTitle.Location = new Point(24, 12);
             lblBkTitle.AutoSize = true;
             page.Controls.Add(lblBkTitle);
 
-            // Box Sao luu
+            // Khung Sao lưu
             GroupBox grpBk = new GroupBox();
-            grpBk.Text = "\U0001F4BE  Sao luu toan bo Driver OEM ra USB";
+            grpBk.Text = "  Sao lưu toàn bộ Driver OEM ra USB (Dùng trước khi cài lại Win)";
             grpBk.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             grpBk.Location = new Point(24, 50);
-            grpBk.Size = new Size(880, 120);
+            grpBk.Size = new Size(900, 120);
             grpBk.ForeColor = PrimaryColor;
 
             Label lblBkDesc = new Label();
-            lblBkDesc.Text = "Xuat toan bo driver cua may ra thu muc truoc khi cai lai Windows.";
-            lblBkDesc.Font = new Font("Segoe UI", 8.8f);
+            lblBkDesc.Text = "Trích xuất toàn bộ driver gốc của máy ra thư mục. Khi cài lại Win chỉ cần nạp lại là nhận đủ mọi phần cứng.";
+            lblBkDesc.Font = new Font("Segoe UI", 9f);
             lblBkDesc.ForeColor = TextSecondary;
             lblBkDesc.Location = new Point(16, 26);
             lblBkDesc.AutoSize = true;
@@ -855,12 +844,12 @@ namespace DriverChecker
             txtBackupPath = new TextBox();
             txtBackupPath.Font = new Font("Segoe UI", 9.5f);
             txtBackupPath.Location = new Point(16, 50);
-            txtBackupPath.Size = new Size(620, 28);
+            txtBackupPath.Size = new Size(635, 28);
             txtBackupPath.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "DriverBackup");
 
             Button btnBrowseBk = new Button();
             btnBrowseBk.Text = "...";
-            btnBrowseBk.Location = new Point(642, 49);
+            btnBrowseBk.Location = new Point(658, 49);
             btnBrowseBk.Size = new Size(35, 28);
             btnBrowseBk.Click += delegate(object s, EventArgs e)
             {
@@ -868,9 +857,9 @@ namespace DriverChecker
                     if (fbd.ShowDialog() == DialogResult.OK) txtBackupPath.Text = fbd.SelectedPath;
             };
 
-            btnStartBackup = CreateButton("\U0001F4BE  Bat Dau Sao Luu", PrimaryColor, true);
-            btnStartBackup.Location = new Point(688, 48);
-            btnStartBackup.Size = new Size(175, 30);
+            btnStartBackup = CreateButton("Bắt đầu sao lưu", PrimaryColor, true);
+            btnStartBackup.Location = new Point(702, 48);
+            btnStartBackup.Size = new Size(180, 30);
             btnStartBackup.Click += async delegate(object s, EventArgs e) { await BackupDriversAsync(); };
 
             lblBackupResult = new Label();
@@ -886,17 +875,17 @@ namespace DriverChecker
             grpBk.Controls.Add(lblBackupResult);
             page.Controls.Add(grpBk);
 
-            // Box Khoi phuc
+            // Khung Khôi phục
             GroupBox grpRs = new GroupBox();
-            grpRs.Text = "\U0001F504  Khoi phuc Driver sau khi cai Win (100% Khong can mang)";
+            grpRs.Text = "  Khôi phục Driver sau khi cài Win (100% Không cần kết nối mạng)";
             grpRs.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             grpRs.Location = new Point(24, 180);
-            grpRs.Size = new Size(880, 110);
+            grpRs.Size = new Size(900, 110);
             grpRs.ForeColor = Color.FromArgb(22, 163, 74);
 
             Label lblRsDesc = new Label();
-            lblRsDesc.Text = "Chon thu muc DriverBackup da luu truoc do tren USB de cai dat lai vao may trong 1 phut.";
-            lblRsDesc.Font = new Font("Segoe UI", 8.8f);
+            lblRsDesc.Text = "Chọn thư mục DriverBackup đã lưu trên USB để cài đặt lại toàn bộ driver vào máy trong vòng 1-2 phút.";
+            lblRsDesc.Font = new Font("Segoe UI", 9f);
             lblRsDesc.ForeColor = TextSecondary;
             lblRsDesc.Location = new Point(16, 26);
             lblRsDesc.AutoSize = true;
@@ -904,11 +893,11 @@ namespace DriverChecker
             txtRestorePath = new TextBox();
             txtRestorePath.Font = new Font("Segoe UI", 9.5f);
             txtRestorePath.Location = new Point(16, 52);
-            txtRestorePath.Size = new Size(620, 28);
+            txtRestorePath.Size = new Size(635, 28);
 
             Button btnBrowseRs = new Button();
             btnBrowseRs.Text = "...";
-            btnBrowseRs.Location = new Point(642, 51);
+            btnBrowseRs.Location = new Point(658, 51);
             btnBrowseRs.Size = new Size(35, 28);
             btnBrowseRs.Click += delegate(object s, EventArgs e)
             {
@@ -916,9 +905,9 @@ namespace DriverChecker
                     if (fbd.ShowDialog() == DialogResult.OK) txtRestorePath.Text = fbd.SelectedPath;
             };
 
-            btnStartRestore = CreateButton("\U0001F504  Bat Dau Khoi Phuc", Color.FromArgb(22, 163, 74), true);
-            btnStartRestore.Location = new Point(688, 50);
-            btnStartRestore.Size = new Size(175, 30);
+            btnStartRestore = CreateButton("Bắt đầu khôi phục", Color.FromArgb(22, 163, 74), true);
+            btnStartRestore.Location = new Point(702, 50);
+            btnStartRestore.Size = new Size(180, 30);
             btnStartRestore.Click += async delegate(object s, EventArgs e) { await RestoreDriversAsync(); };
 
             grpRs.Controls.Add(lblRsDesc);
@@ -927,56 +916,55 @@ namespace DriverChecker
             grpRs.Controls.Add(btnStartRestore);
             page.Controls.Add(grpRs);
 
-            // Log
+            // Bảng nhật ký
             Label lblLogTitle = new Label();
-            lblLogTitle.Text = "Nhat ky thao tac:";
+            lblLogTitle.Text = "Nhật ký quá trình sao lưu & khôi phục:";
             lblLogTitle.Location = new Point(24, 300);
             lblLogTitle.AutoSize = true;
-            lblLogTitle.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            lblLogTitle.Font = new Font("Segoe UI", 9.2f, FontStyle.Bold);
             page.Controls.Add(lblLogTitle);
 
             lvBackupLog = new ListView();
             lvBackupLog.Location = new Point(24, 325);
-            lvBackupLog.Size = new Size(880, 240);
+            lvBackupLog.Size = new Size(900, 240);
             lvBackupLog.View = View.Details;
             lvBackupLog.FullRowSelect = true;
             lvBackupLog.GridLines = true;
-            lvBackupLog.Font = new Font("Consolas", 9f);
+            lvBackupLog.Font = new Font("Segoe UI", 9f);
             lvBackupLog.BackColor = CardBg;
             lvBackupLog.BorderStyle = BorderStyle.FixedSingle;
-            lvBackupLog.Columns.Add("Thoi gian", 85);
-            lvBackupLog.Columns.Add("Thao tac", 120);
-            lvBackupLog.Columns.Add("Chi tiet", 650);
+            lvBackupLog.Columns.Add("Thời gian", 90);
+            lvBackupLog.Columns.Add("Thao tác", 130);
+            lvBackupLog.Columns.Add("Nội dung chi tiết", 660);
             page.Controls.Add(lvBackupLog);
         }
 
         // ================================================================
-        //  VIEW 4: CAI DAT UNG DUNG THIET YEU (WINGET APP INSTALLER)
+        //  TRANG 4: CÀI ĐẶT ỨNG DỤNG THIẾT YẾU
         // ================================================================
         private void BuildAppInstallerPage(Panel page)
         {
             page.Padding = new Padding(24, 20, 24, 20);
 
             Label lblAppTitle = new Label();
-            lblAppTitle.Text = "C\u00E0i \u0111\u1EB7t \u1EE8ng d\u1EE5ng thi\u1EBFt y\u1EBFu (1-Click qua Microsoft Winget)";
+            lblAppTitle.Text = "Cài đặt ứng dụng thiết yếu (1-Click qua Microsoft Winget)";
             lblAppTitle.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
             lblAppTitle.ForeColor = TextPrimary;
             lblAppTitle.Location = new Point(24, 12);
             lblAppTitle.AutoSize = true;
             page.Controls.Add(lblAppTitle);
 
-            // Top action bar
             Panel topBar = new Panel();
             topBar.Location = new Point(24, 48);
-            topBar.Size = new Size(880, 44);
+            topBar.Size = new Size(900, 44);
 
-            btnInstallApps = CreateButton("\u26A1  Cai Dat Ung Dung Da Chon", Color.FromArgb(22, 163, 74), true);
+            btnInstallApps = CreateButton("Cài đặt các ứng dụng đã chọn", Color.FromArgb(22, 163, 74), true);
             btnInstallApps.Location = new Point(0, 4);
             btnInstallApps.Size = new Size(240, 36);
             btnInstallApps.Click += async delegate(object s, EventArgs e) { await InstallSelectedAppsAsync(); };
 
             btnSelectRecApps = new Button();
-            btnSelectRecApps.Text = "\u2B50 Chon ung dung khuyen dung";
+            btnSelectRecApps.Text = "Chọn phần mềm khuyên dùng";
             btnSelectRecApps.Location = new Point(250, 4);
             btnSelectRecApps.Size = new Size(210, 36);
             btnSelectRecApps.FlatStyle = FlatStyle.Flat;
@@ -993,9 +981,9 @@ namespace DriverChecker
             };
 
             btnDeselectApps = new Button();
-            btnDeselectApps.Text = "Bo chon tat ca";
+            btnDeselectApps.Text = "Bỏ chọn tất cả";
             btnDeselectApps.Location = new Point(470, 4);
-            btnDeselectApps.Size = new Size(120, 36);
+            btnDeselectApps.Size = new Size(130, 36);
             btnDeselectApps.FlatStyle = FlatStyle.Flat;
             btnDeselectApps.FlatAppearance.BorderColor = CardBorder;
             btnDeselectApps.Font = new Font("Segoe UI", 9f);
@@ -1010,10 +998,9 @@ namespace DriverChecker
             topBar.Controls.Add(btnDeselectApps);
             page.Controls.Add(topBar);
 
-            // Danh sach App
             lvApps = new ListView();
             lvApps.Location = new Point(24, 100);
-            lvApps.Size = new Size(880, 400);
+            lvApps.Size = new Size(900, 400);
             lvApps.View = View.Details;
             lvApps.FullRowSelect = true;
             lvApps.GridLines = true;
@@ -1023,12 +1010,11 @@ namespace DriverChecker
             lvApps.BorderStyle = BorderStyle.FixedSingle;
 
             lvApps.Columns.Add("", 35, HorizontalAlignment.Center);
-            lvApps.Columns.Add("Ung dung", 200);
-            lvApps.Columns.Add("Phan loai", 140);
-            lvApps.Columns.Add("Package ID", 190);
-            lvApps.Columns.Add("Mo ta", 300);
+            lvApps.Columns.Add("Tên ứng dụng", 180);
+            lvApps.Columns.Add("Phân loại", 150);
+            lvApps.Columns.Add("Mã Package ID", 190);
+            lvApps.Columns.Add("Mô tả chi tiết", 320);
 
-            // Populate default apps
             InitDefaultApps();
             foreach (var app in appList)
             {
@@ -1044,16 +1030,15 @@ namespace DriverChecker
 
             page.Controls.Add(lvApps);
 
-            // Progress & Status
             lblAppStatus = new Label();
-            lblAppStatus.Text = "Chon cac ung dung can thiet va bam \"Cai Dat\". Winget se tai va cai dat hoan toan tu dong.";
+            lblAppStatus.Text = "Chọn các phần mềm cần thiết rồi bấm \"Cài đặt\". Hệ thống sẽ tự động tải và cài đặt sạch sẽ ngầm.";
             lblAppStatus.Location = new Point(24, 510);
             lblAppStatus.AutoSize = true;
             lblAppStatus.ForeColor = TextSecondary;
 
             prgApps = new ProgressBar();
             prgApps.Location = new Point(24, 535);
-            prgApps.Size = new Size(880, 18);
+            prgApps.Size = new Size(900, 18);
             prgApps.Visible = false;
 
             page.Controls.Add(lblAppStatus);
@@ -1063,51 +1048,51 @@ namespace DriverChecker
         private void InitDefaultApps()
         {
             appList.Clear();
-            appList.Add(new WingetApp("UniKey", "UniKey.UniKey", "Bo go tieng Viet", "Bo go tieng Viet chuan nhat cho Windows", true));
-            appList.Add(new WingetApp("Google Chrome", "Google.Chrome", "Trinh duyet", "Trinh duyet web pho bien nhat the gioi", true));
-            appList.Add(new WingetApp("7-Zip", "7zip.7zip", "Nen & Giai nen", "Phan mem giai nen file sieu nhe va mien phi", true));
-            appList.Add(new WingetApp("Zalo", "VNG.Zalo", "Nhan tin & Goi", "Ung dung nhan tin va goi dien pho bien tai Viet Nam", true));
-            appList.Add(new WingetApp("UltraViewer", "UltraViewer.UltraViewer", "Dieu khien tu xa", "Phan mem ho tro ky thuat tu xa tien loi", true));
-            appList.Add(new WingetApp("VLC Media Player", "VideoLAN.VLC", "Xem phim / Nghe nhac", "Trinh phat video da dinh dang khong can cai codec", false));
-            appList.Add(new WingetApp("Notepad++", "Notepad++.Notepad++", "Soan thao van ban", "Trinh soan thao text & code da nang", false));
-            appList.Add(new WingetApp("Foxit PDF Reader", "Foxit.FoxitReader", "Doc file PDF", "Trinh doc va chu thich file PDF manh me", false));
-            appList.Add(new WingetApp("WinRAR", "RARLab.WinRAR", "Nen & Giai nen", "Phan mem giai nen dinh dang .rar kinh dien", false));
-            appList.Add(new WingetApp("Discord", "Discord.Discord", "Giao tiep game thu", "Nen tang chat voice va cong dong", false));
-            appList.Add(new WingetApp("Steam", "Valve.Steam", "Choi game", "Nen tang mua va choi game ban quyen", false));
-            appList.Add(new WingetApp("Visual Studio Code", "Microsoft.VisualStudioCode", "Lap trinh", "Trinh soan thao ma nguon so 1 the gioi", false));
+            appList.Add(new WingetApp("UniKey", "UniKey.UniKey", "Gõ tiếng Việt", "Bộ gõ tiếng Việt chuẩn và nhẹ nhất cho Windows", true));
+            appList.Add(new WingetApp("Google Chrome", "Google.Chrome", "Trình duyệt Web", "Trình duyệt web thông dụng, đồng bộ tài khoản Google", true));
+            appList.Add(new WingetApp("7-Zip", "7zip.7zip", "Nén & Giải nén", "Phần mềm giải nén file siêu nhẹ, mở mọi định dạng", true));
+            appList.Add(new WingetApp("Zalo", "VNG.Zalo", "Nhắn tin & Làm việc", "Ứng dụng nhắn tin và gửi file tài liệu số 1 Việt Nam", true));
+            appList.Add(new WingetApp("UltraViewer", "UltraViewer.UltraViewer", "Điều khiển từ xa", "Hỗ trợ kết nối máy tính và trợ giúp từ xa dễ dàng", true));
+            appList.Add(new WingetApp("VLC Media Player", "VideoLAN.VLC", "Xem phim & Nghe nhạc", "Trình phát mọi định dạng video, âm thanh không cần cài codec", false));
+            appList.Add(new WingetApp("Notepad++", "Notepad++.Notepad++", "Soạn thảo văn bản", "Trình soạn thảo văn bản nhẹ, mở file cấu hình lớn", false));
+            appList.Add(new WingetApp("Foxit PDF Reader", "Foxit.FoxitReader", "Đọc file PDF", "Phần mềm xem, in ấn và ghi chú trên file tài liệu PDF", false));
+            appList.Add(new WingetApp("WinRAR", "RARLab.WinRAR", "Nén & Giải nén", "Phần mềm giải nén định dạng .rar kinh điển", false));
+            appList.Add(new WingetApp("Discord", "Discord.Discord", "Giao tiếp cộng đồng", "Kênh trò chuyện, gọi thoại nhóm cho game thủ và đội ngũ", false));
+            appList.Add(new WingetApp("Steam", "Valve.Steam", "Nền tảng chơi game", "Kho game bản quyền hàng đầu thế giới", false));
+            appList.Add(new WingetApp("Visual Studio Code", "Microsoft.VisualStudioCode", "Lập trình phần mềm", "Trình soạn thảo mã nguồn chuyên nghiệp của Microsoft", false));
         }
 
         // ================================================================
-        //  VIEW 5: SUA LOI & TOI UU HOA
+        //  TRANG 5: SỬA LỖI & TỐI ƯU HỆ THỐNG
         // ================================================================
         private void BuildFixOptimizePage(Panel page)
         {
             page.Padding = new Padding(24, 20, 24, 20);
 
             Label lblFixTitle = new Label();
-            lblFixTitle.Text = "S\u1EEDa l\u1ED7i & T\u1ED1i \u01B0u h\u00F3a H\u1EC7 th\u1ED1ng (1-Click)";
+            lblFixTitle.Text = "Sửa lỗi & Tối ưu hóa hệ thống (1-Click)";
             lblFixTitle.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
             lblFixTitle.ForeColor = TextPrimary;
             lblFixTitle.Location = new Point(24, 12);
             lblFixTitle.AutoSize = true;
             page.Controls.Add(lblFixTitle);
 
-            int btnW = 270;
-            int btnH = 65;
+            int btnW = 280;
+            int btnH = 68;
 
-            btnRunSfc = CreateToolButton("\U0001F6E1  Sua file he thong (SFC)", "Chay sfc /scannow sua file bi loi", 24, 52, btnW, btnH);
+            btnRunSfc = CreateToolButton("Sửa tập tin hệ thống (SFC)", "Tự động phát hiện và sửa các file Windows bị hỏng (sfc /scannow)", 24, 52, btnW, btnH);
             btnRunSfc.Click += delegate(object s, EventArgs e) { RunCmdTool("sfc.exe", "/scannow", "SFC Scannow"); };
 
-            btnRunDism = CreateToolButton("\u2699  Sua anh Windows (DISM)", "Chay DISM RestoreHealth online", 310, 52, btnW, btnH);
+            btnRunDism = CreateToolButton("Sửa chữa ảnh Windows (DISM)", "Tải gói chuẩn từ Microsoft để phục hồi hệ thống (DISM)", 320, 52, btnW, btnH);
             btnRunDism.Click += delegate(object s, EventArgs e) { RunCmdTool("dism.exe", "/online /cleanup-image /restorehealth", "DISM RestoreHealth"); };
 
-            btnResetNet = CreateToolButton("\U0001F310  Reset Mang (Winsock & IP)", "Khoi phuc mang khi bi cham than/mat ket noi", 596, 52, btnW, btnH);
+            btnResetNet = CreateToolButton("Khôi phục mạng (Reset Network)", "Sửa lỗi mạng bị chấm than vàng, mất kết nối Wi-Fi/LAN", 616, 52, btnW, btnH);
             btnResetNet.Click += ResetNetwork;
 
-            btnCleanTemp = CreateToolButton("\U0001F9F9  Don sach file rac Temp", "Xoa sach %TEMP%, Windows Temp, Prefetch", 24, 128, btnW, btnH);
+            btnCleanTemp = CreateToolButton("Dọn dẹp file rác & Bộ nhớ đệm", "Xóa các file tạm Temp, Prefetch giúp giải phóng ổ C", 24, 132, btnW, btnH);
             btnCleanTemp.Click += CleanTempFiles;
 
-            btnResetWu = CreateToolButton("\U0001F504  Reset Windows Update", "Khoi dong lai service va xoa cache tai loi", 310, 128, btnW, btnH);
+            btnResetWu = CreateToolButton("Khởi động lại Windows Update", "Khắc phục tình trạng cập nhật bị treo hoặc đứng hình", 320, 132, btnW, btnH);
             btnResetWu.Click += ResetWindowsUpdateService;
 
             page.Controls.Add(btnRunSfc);
@@ -1117,20 +1102,20 @@ namespace DriverChecker
             page.Controls.Add(btnResetWu);
 
             Label lblLogHeader = new Label();
-            lblLogHeader.Text = "Ket qua thuc thi:";
-            lblLogHeader.Location = new Point(24, 210);
+            lblLogHeader.Text = "Nhật ký tiến trình thực thi lệnh:";
+            lblLogHeader.Location = new Point(24, 215);
             lblLogHeader.AutoSize = true;
-            lblLogHeader.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            lblLogHeader.Font = new Font("Segoe UI", 9.2f, FontStyle.Bold);
             page.Controls.Add(lblLogHeader);
 
             txtFixLog = new TextBox();
-            txtFixLog.Location = new Point(24, 235);
-            txtFixLog.Size = new Size(880, 320);
+            txtFixLog.Location = new Point(24, 240);
+            txtFixLog.Size = new Size(872, 315);
             txtFixLog.Multiline = true;
             txtFixLog.ScrollBars = ScrollBars.Vertical;
             txtFixLog.ReadOnly = true;
             txtFixLog.BackColor = CardBg;
-            txtFixLog.Font = new Font("Consolas", 9f);
+            txtFixLog.Font = new Font("Consolas", 9.2f);
             page.Controls.Add(txtFixLog);
         }
 
@@ -1143,7 +1128,6 @@ namespace DriverChecker
             {
                 try
                 {
-                    // OS Info
                     var osSearcher = new ManagementObjectSearcher("SELECT Caption, Version, LastBootUpTime, InstallDate FROM Win32_OperatingSystem");
                     foreach (ManagementObject obj in osSearcher.Get())
                     {
@@ -1151,18 +1135,16 @@ namespace DriverChecker
                         string version = (obj["Version"] ?? "").ToString();
                         SafeInvoke(delegate()
                         {
-                            lblOsInfo.Text = string.Format("He dieu hanh:   {0} ({1})", caption, version);
+                            lblOsInfo.Text = string.Format("Hệ điều hành:       {0} ({1})", caption, version);
                         });
 
-                        // Install Date
                         string rawDate = (obj["InstallDate"] ?? "").ToString();
                         if (rawDate.Length >= 8)
                         {
-                            string d = string.Format("{0}-{1}-{2}", rawDate.Substring(0, 4), rawDate.Substring(4, 2), rawDate.Substring(6, 2));
-                            SafeInvoke(delegate() { lblInstallDate.Text = "Ngay cai Win:   " + d; });
+                            string d = string.Format("{0}/{1}/{2}", rawDate.Substring(6, 2), rawDate.Substring(4, 2), rawDate.Substring(0, 4));
+                            SafeInvoke(delegate() { lblInstallDate.Text = "Ngày cài Windows:   " + d; });
                         }
 
-                        // Uptime
                         try
                         {
                             string bootStr = (obj["LastBootUpTime"] ?? "").ToString();
@@ -1170,13 +1152,12 @@ namespace DriverChecker
                             TimeSpan up = DateTime.Now - bootTime;
                             SafeInvoke(delegate()
                             {
-                                lblUptime.Text = string.Format("Thoi gian chay: {0} ngay {1} gio {2} phut", up.Days, up.Hours, up.Minutes);
+                                lblUptime.Text = string.Format("Thời gian mở máy:   {0} ngày {1} giờ {2} phút", up.Days, up.Hours, up.Minutes);
                             });
                         }
                         catch { }
                     }
 
-                    // CPU Info
                     var cpuSearcher = new ManagementObjectSearcher("SELECT Name, NumberOfCores, NumberOfLogicalProcessors FROM Win32_Processor");
                     foreach (ManagementObject obj in cpuSearcher.Get())
                     {
@@ -1185,12 +1166,11 @@ namespace DriverChecker
                         int threads = Convert.ToInt32(obj["NumberOfLogicalProcessors"] ?? 0);
                         SafeInvoke(delegate()
                         {
-                            lblCpuInfo.Text = string.Format("Bo xu ly:       {0} ({1} nhan, {2} luong)", name, cores, threads);
-                            cpuSubtext = string.Format("{0} nhan, {1} luong", cores, threads);
+                            lblCpuInfo.Text = string.Format("Bộ vi xử lý:        {0} ({1} nhân, {2} luồng)", name, cores, threads);
+                            cpuSubtext = string.Format("{0} nhân, {1} luồng", cores, threads);
                         });
                     }
 
-                    // RAM Info
                     var csSearcher = new ManagementObjectSearcher("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem");
                     foreach (ManagementObject obj in csSearcher.Get())
                     {
@@ -1198,11 +1178,10 @@ namespace DriverChecker
                         double gb = Math.Round(bytes / (1024 * 1024 * 1024), 1);
                         SafeInvoke(delegate()
                         {
-                            lblRamInfo.Text = string.Format("Bo nho RAM:     {0} GB", gb);
+                            lblRamInfo.Text = string.Format("Bộ nhớ RAM:         {0} GB", gb);
                         });
                     }
 
-                    // Mainboard Info
                     var bbSearcher = new ManagementObjectSearcher("SELECT Manufacturer, Product FROM Win32_BaseBoard");
                     foreach (ManagementObject obj in bbSearcher.Get())
                     {
@@ -1210,11 +1189,10 @@ namespace DriverChecker
                         string prod = (obj["Product"] ?? "").ToString().Trim();
                         SafeInvoke(delegate()
                         {
-                            lblMainboardInfo.Text = string.Format("Bo mach chu:    {0} {1}", mfr, prod);
+                            lblMainboardInfo.Text = string.Format("Bo mạch chủ:        {0} {1}", mfr, prod);
                         });
                     }
 
-                    // GPU Info & Direct Link
                     var gpuSearcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
                     foreach (ManagementObject obj in gpuSearcher.Get())
                     {
@@ -1223,7 +1201,7 @@ namespace DriverChecker
 
                         SafeInvoke(delegate()
                         {
-                            lblGpuInfo.Text = "Card do hoa:    " + gName;
+                            lblGpuInfo.Text = "Card màn hình:      " + gName;
                         });
 
                         string lower = gName.ToLower();
@@ -1247,26 +1225,28 @@ namespace DriverChecker
                         {
                             SafeInvoke(delegate()
                             {
-                                btnGpuDirectLink.Text = "\U0001F310 Tai tu " + gpuVendor;
+                                btnGpuDirectLink.Text = "Tải từ " + gpuVendor + ".com";
                                 btnGpuDirectLink.Visible = true;
+                                if (btnBannerDownload != null)
+                                {
+                                    btnBannerDownload.Text = "Tải trực tiếp từ " + gpuVendor + ".com";
+                                }
                             });
                         }
                         break;
                     }
 
-                    // System Health
                     CheckSystemHealth();
                 }
                 catch (Exception ex)
                 {
-                    Logger.Log("Loi load dashboard: " + ex.Message);
+                    Logger.Log("Lỗi nạp thông số Dashboard: " + ex.Message);
                 }
             }));
         }
 
         private void CheckSystemHealth()
         {
-            // Windows Activation
             try
             {
                 var licSearcher = new ManagementObjectSearcher(
@@ -1275,16 +1255,15 @@ namespace DriverChecker
                 SafeInvoke(delegate()
                 {
                     lblHealthActivation.Text = isActivated ?
-                        "Kich hoat Windows:              \u2705 Da kich hoat ban quyen" :
-                        "Kich hoat Windows:              \u274C Chua kich hoat ban quyen";
+                        "Bản quyền Windows:                  Đã kích hoạt bản quyền chính hãng" :
+                        "Bản quyền Windows:                  Chưa kích hoạt bản quyền";
                 });
             }
             catch
             {
-                SafeInvoke(delegate() { lblHealthActivation.Text = "Kich hoat Windows:              \u2705 Da kich hoat"; });
+                SafeInvoke(delegate() { lblHealthActivation.Text = "Bản quyền Windows:                  Đã kích hoạt bản quyền"; });
             }
 
-            // Secure Boot
             try
             {
                 int sb = Convert.ToInt32(Microsoft.Win32.Registry.GetValue(
@@ -1292,33 +1271,31 @@ namespace DriverChecker
                 SafeInvoke(delegate()
                 {
                     lblHealthSecureBoot.Text = sb == 1 ?
-                        "Khoi dong an toan (Secure Boot): \u2705 Bat" :
-                        "Khoi dong an toan (Secure Boot): \u26A0 Tat";
+                        "Khởi động an toàn (Secure Boot):     Đang BẬT" :
+                        "Khởi động an toàn (Secure Boot):     Đang TẮT (Có thể bật trong BIOS nếu cần)";
                 });
             }
             catch { }
 
-            // Defender
             SafeInvoke(delegate()
             {
-                lblHealthDefender.Text = "Bao ve thoi gian thuc:           \u2705 Dang hoat dong";
+                lblHealthDefender.Text = "Bảo vệ thời gian thực (Antivirus):   Đang hoạt động tốt";
             });
 
-            // Restore Point
             try
             {
                 var srSearcher = new ManagementObjectSearcher("root\\default", "SELECT * FROM SystemRestore");
                 int count = srSearcher.Get().Count;
                 SafeInvoke(delegate()
                 {
-                    lblHealthRestore.Text = string.Format("Bao ve he thong (Restore Point):  \u2705 Bat ({0} diem khoi phuc)", count);
+                    lblHealthRestore.Text = string.Format("Điểm khôi phục (Restore Point):      Đang BẬT ({0} điểm sao lưu có sẵn)", count);
                 });
             }
             catch
             {
                 SafeInvoke(delegate()
                 {
-                    lblHealthRestore.Text = "Bao ve he thong (Restore Point):  \u2705 Co the tao diem moi";
+                    lblHealthRestore.Text = "Điểm khôi phục (Restore Point):      Sẵn sàng bảo vệ máy";
                 });
             }
         }
@@ -1329,16 +1306,14 @@ namespace DriverChecker
             {
                 try
                 {
-                    // Disk C
                     var dInfo = new DriveInfo("C");
                     double usedBytes = dInfo.TotalSize - dInfo.AvailableFreeSpace;
                     double usedGb = Math.Round(usedBytes / (1024 * 1024 * 1024), 1);
                     double totalGb = Math.Round((double)dInfo.TotalSize / (1024 * 1024 * 1024), 1);
                     double freeGb = Math.Round((double)dInfo.AvailableFreeSpace / (1024 * 1024 * 1024), 1);
                     diskPercent = (float)Math.Round((usedBytes / dInfo.TotalSize) * 100);
-                    diskSubtext = string.Format("Trong {0} GB tren {1} GB", freeGb, totalGb);
+                    diskSubtext = string.Format("Trống {0} GB / {1} GB", freeGb, totalGb);
 
-                    // RAM
                     var osSearcher = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize, FreePhysicalMemory FROM Win32_OperatingSystem");
                     foreach (ManagementObject obj in osSearcher.Get())
                     {
@@ -1349,14 +1324,12 @@ namespace DriverChecker
                         ramSubtext = string.Format("{0} GB / {1} GB", Math.Round(usedKb / (1024 * 1024), 1), Math.Round(totalKb / (1024 * 1024), 1));
                     }
 
-                    // CPU (sample query)
                     var cpuSearcher = new ManagementObjectSearcher("SELECT LoadPercentage FROM Win32_Processor");
                     foreach (ManagementObject obj in cpuSearcher.Get())
                     {
                         cpuPercent = Convert.ToSingle(obj["LoadPercentage"] ?? 15);
                     }
 
-                    // Redraw
                     SafeInvoke(delegate()
                     {
                         if (pnlGaugeCpu != null) pnlGaugeCpu.Invalidate();
@@ -1371,8 +1344,8 @@ namespace DriverChecker
         private void CopySpecsToClipboard(object sender, EventArgs e)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("=== THONG SO MAY TINH (DRIVER CHECKER) ===");
-            sb.AppendLine("May tinh:   " + lblPcName.Text);
+            sb.AppendLine("=== CẤU HÌNH MÁY TÍNH (DRIVER CHECKER) ===");
+            sb.AppendLine("Tên máy:          " + lblPcName.Text);
             sb.AppendLine(lblOsInfo.Text);
             sb.AppendLine(lblCpuInfo.Text);
             sb.AppendLine(lblGpuInfo.Text);
@@ -1381,11 +1354,11 @@ namespace DriverChecker
             sb.AppendLine(lblInstallDate.Text);
             sb.AppendLine(lblUptime.Text);
             Clipboard.SetText(sb.ToString());
-            MessageBox.Show("Da sao chep thong so may vao Clipboard!", "Thanh cong");
+            MessageBox.Show("Đã sao chép toàn bộ thông số cấu hình máy vào bộ nhớ tạm (Clipboard)!", "Thành công");
         }
 
         // ================================================================
-        //  LOGIC: DRIVER SCAN & INSTALL
+        //  LOGIC: QUÉT & CÀI ĐẶT DRIVER
         // ================================================================
         private async Task RunFullScanAsync()
         {
@@ -1398,7 +1371,7 @@ namespace DriverChecker
                 updatesAvailable = 0;
                 prgDriver.Visible = true;
                 prgDriver.Style = ProgressBarStyle.Marquee;
-                lblDriverStatus.Text = "\u23F3 Dang quet thiet bi phan cung...";
+                lblDriverStatus.Text = "Đang quét danh sách thiết bị phần cứng trên máy...";
             });
 
             await Task.Run(new Action(delegate()
@@ -1423,7 +1396,7 @@ namespace DriverChecker
                         if (nameLower == "microsoft system management bios driver") continue;
 
                         string rawDate = (obj["DriverDate"] ?? "").ToString();
-                        string formattedDate = "N/A";
+                        string formattedDate = "Không rõ";
                         if (rawDate.Length >= 8)
                             formattedDate = rawDate.Substring(0, 4) + "-" + rawDate.Substring(4, 2) + "-" + rawDate.Substring(6, 2);
 
@@ -1440,9 +1413,11 @@ namespace DriverChecker
                         dev.DeviceName = deviceName;
                         dev.Category = CategoryNames.ContainsKey(deviceClass) ? CategoryNames[deviceClass] : deviceClass;
                         dev.Manufacturer = (obj["Manufacturer"] ?? "").ToString();
-                        dev.CurrentVersion = (obj["DriverVersion"] ?? "Chua cai").ToString();
+                        dev.CurrentVersion = (obj["DriverVersion"] ?? "Chưa cài").ToString();
                         dev.DriverDate = formattedDate;
                         dev.HardwareID = hwId;
+                        dev.Status = "Đã mới nhất";
+                        dev.StatusColor = Color.FromArgb(22, 163, 74);
                         deviceList.Add(dev);
                     }
                 }
@@ -1454,10 +1429,9 @@ namespace DriverChecker
 
             SafeInvoke(delegate()
             {
-                lblDriverStatus.Text = string.Format("\u23F3 Tim thay {0} thiet bi. Dang hoi may chu Microsoft Update...", deviceList.Count);
+                lblDriverStatus.Text = string.Format("Tìm thấy {0} thiết bị. Đang kiểm tra bản cập nhật từ máy chủ Microsoft...", deviceList.Count);
             });
 
-            // Windows Update API query
             await Task.Run(new Action(delegate()
             {
                 try
@@ -1481,7 +1455,7 @@ namespace DriverChecker
                             {
                                 if (IsDriverMatch(dev, updateTitle))
                                 {
-                                    dev.Status = "\U0001F504 Co ban cap nhat";
+                                    dev.Status = "Có bản cập nhật mới";
                                     dev.StatusColor = Color.FromArgb(202, 138, 4);
                                     dev.AvailableUpdate = update;
                                     dev.UpdateTitle = updateTitle;
@@ -1496,10 +1470,10 @@ namespace DriverChecker
                             {
                                 var newDev = new HardwareDevice();
                                 newDev.DeviceName = updateTitle;
-                                newDev.Category = "\U0001F4E6 Driver moi";
-                                newDev.CurrentVersion = "Chua co";
-                                newDev.DriverDate = "N/A";
-                                newDev.Status = "\U0001F534 Can cai dat";
+                                newDev.Category = "Trình điều khiển mới";
+                                newDev.CurrentVersion = "Chưa có";
+                                newDev.DriverDate = "Mới";
+                                newDev.Status = "Cần cài đặt";
                                 newDev.StatusColor = Color.FromArgb(220, 38, 38);
                                 newDev.AvailableUpdate = update;
                                 newDev.UpdateTitle = updateTitle;
@@ -1522,12 +1496,12 @@ namespace DriverChecker
                 btnUpdateDrivers.Enabled = updatesAvailable > 0;
                 if (updatesAvailable > 0)
                 {
-                    lblDriverStatus.Text = string.Format("Quet xong: {0} thiet bi | \U0001F504 {1} cap nhat kha dung tu Microsoft.", deviceList.Count, updatesAvailable);
+                    lblDriverStatus.Text = string.Format("Quét xong: {0} thiết bị | Có {1} bản cập nhật mới từ Microsoft. Tích chọn và bấm \"Cài đặt Driver\".", deviceList.Count, updatesAvailable);
                     lblDriverStatus.ForeColor = Color.FromArgb(202, 138, 4);
                 }
                 else
                 {
-                    lblDriverStatus.Text = string.Format("\u2705 Quet xong: {0} thiet bi. Tat ca driver da moi nhat!", deviceList.Count);
+                    lblDriverStatus.Text = string.Format("Quét xong: {0} thiết bị. Toàn bộ Driver trên máy đều đã ở phiên bản mới nhất!", deviceList.Count);
                     lblDriverStatus.ForeColor = Color.FromArgb(22, 163, 74);
                 }
             });
@@ -1588,12 +1562,12 @@ namespace DriverChecker
 
             if (toInstall.Count == 0)
             {
-                MessageBox.Show("Vui long chon it nhat 1 driver can cap nhat!", "Thong bao");
+                MessageBox.Show("Vui lòng tích chọn ít nhất 1 driver cần cập nhật!", "Thông báo");
                 return;
             }
 
-            if (MessageBox.Show(string.Format("Ban co chac muon tai va cai {0} driver tu Microsoft?", toInstall.Count),
-                "Xac nhan", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            if (MessageBox.Show(string.Format("Bạn có chắc chắn muốn tải và cài đặt {0} driver từ Microsoft?", toInstall.Count),
+                "Xác nhận cài đặt", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             btnScanDrivers.Enabled = false;
             btnUpdateDrivers.Enabled = false;
@@ -1604,7 +1578,7 @@ namespace DriverChecker
 
             if (chkRestorePoint.Checked)
             {
-                lblDriverStatus.Text = "\U0001F6E1 Dang tao Restore Point...";
+                lblDriverStatus.Text = "Đang tạo điểm khôi phục hệ thống (Restore Point)...";
                 await Task.Run(new Action(delegate() { CreateRestorePoint(); }));
                 prgDriver.Value = Math.Min(prgDriver.Value + 1, prgDriver.Maximum);
             }
@@ -1623,7 +1597,7 @@ namespace DriverChecker
 
                     foreach (var dev in toInstall)
                     {
-                        SafeInvoke(delegate() { lblDriverStatus.Text = "\u2B07 Dang tai: " + dev.DeviceName; });
+                        SafeInvoke(delegate() { lblDriverStatus.Text = "Đang tải xuống: " + dev.DeviceName; });
                         try
                         {
                             try { dev.AvailableUpdate.AcceptEula(); } catch { }
@@ -1635,7 +1609,7 @@ namespace DriverChecker
                             dl.Download();
                             SafeInvoke(delegate() { prgDriver.Value = Math.Min(prgDriver.Value + 1, prgDriver.Maximum); });
 
-                            SafeInvoke(delegate() { lblDriverStatus.Text = "\u2699 Dang cai: " + dev.DeviceName; });
+                            SafeInvoke(delegate() { lblDriverStatus.Text = "Đang cài đặt: " + dev.DeviceName; });
                             dynamic inst = session.CreateUpdateInstaller();
                             inst.Updates = dlColl;
                             dynamic instRes = inst.Install();
@@ -1644,11 +1618,16 @@ namespace DriverChecker
                             if (code == 2 || code == 3)
                             {
                                 success++;
-                                dev.Status = "\u2705 Da cap nhat!";
+                                dev.Status = "Đã cập nhật thành công!";
                                 dev.StatusColor = Color.FromArgb(22, 163, 74);
                                 if ((bool)instRes.RebootRequired) rebootReq = true;
                             }
-                            else { failed++; dev.Status = "\u274C That bai"; dev.StatusColor = Color.FromArgb(220, 38, 38); }
+                            else
+                            {
+                                failed++;
+                                dev.Status = "Cài đặt thất bại";
+                                dev.StatusColor = Color.FromArgb(220, 38, 38);
+                            }
                         }
                         catch { failed++; }
                         SafeInvoke(delegate() { prgDriver.Value = Math.Min(prgDriver.Value + 1, prgDriver.Maximum); });
@@ -1661,28 +1640,34 @@ namespace DriverChecker
             prgDriver.Visible = false;
             btnScanDrivers.Enabled = true;
 
-            string res = string.Format("Hoan tat!\n\u2705 Thanh cong: {0}\n\u274C That bai: {1}", success, failed);
-            lblDriverStatus.Text = string.Format("\u2705 Hoan tat: {0} thanh cong, {1} that bai.", success, failed);
+            string res = string.Format("Quá trình hoàn tất!\nThành công: {0}\nThất bại: {1}", success, failed);
+            lblDriverStatus.Text = string.Format("Hoàn tất: {0} thành công, {1} thất bại.", success, failed);
             if (rebootReq)
             {
-                if (MessageBox.Show(res + "\n\nCan khoi dong lai may de hoan tat. Restart ngay?", "Khoi dong lai", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                    Process.Start("shutdown.exe", "/r /t 5");
+                if (MessageBox.Show(res + "\n\nMột số driver yêu cầu khởi động lại máy để hoàn tất.\nBạn có muốn Restart máy ngay bây giờ không?",
+                    "Cần khởi động lại", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    Process.Start("shutdown.exe", "/r /t 5 /c \"Khởi động lại để hoàn tất cập nhật Driver.\"");
+                }
             }
-            else MessageBox.Show(res, "Ket qua");
+            else
+            {
+                MessageBox.Show(res, "Kết quả cài đặt", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         // ================================================================
-        //  LOGIC: BACKUP & RESTORE
+        //  LOGIC: SAO LƯU & KHÔI PHỤC DRIVER
         // ================================================================
         private async Task BackupDriversAsync()
         {
             string path = txtBackupPath.Text.Trim();
-            if (string.IsNullOrEmpty(path)) { MessageBox.Show("Vui long chon duong dan!"); return; }
+            if (string.IsNullOrEmpty(path)) { MessageBox.Show("Vui lòng chọn đường dẫn thư mục lưu trữ!", "Thông báo"); return; }
 
             btnStartBackup.Enabled = false;
             btnStartRestore.Enabled = false;
-            lblBackupResult.Text = "\U0001F4BE Dang sao luu toan bo driver OEM...";
-            AddBackupLog("SAO LUU", "Bat dau sao luu vao " + path);
+            lblBackupResult.Text = "Đang trích xuất toàn bộ driver OEM của máy ra USB...";
+            AddBackupLog("Sao lưu", "Bắt đầu trích xuất driver vào thư mục: " + path);
 
             bool ok = false;
             await Task.Run(new Action(delegate()
@@ -1708,36 +1693,47 @@ namespace DriverChecker
             {
                 int count = 0;
                 try { count = Directory.GetDirectories(path).Length; } catch { }
-                lblBackupResult.Text = string.Format("\u2705 Sao luu thanh cong {0} goi driver!", count);
+                lblBackupResult.Text = string.Format("Đã sao lưu thành công {0} gói driver!", count);
                 lblBackupResult.ForeColor = Color.FromArgb(22, 163, 74);
-                AddBackupLog("THANH CONG", string.Format("Da luu {0} goi driver tai: {1}", count, path));
-                if (MessageBox.Show("Sao luu thanh cong! Mo thu muc xem?", "Thanh cong", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                AddBackupLog("Thành công", string.Format("Đã lưu {0} gói driver tại: {1}", count, path));
+                if (MessageBox.Show(string.Format("Đã sao lưu thành công {0} gói driver ra USB!\nBạn có muốn mở thư mục xem không?", count),
+                    "Thành công", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                {
                     Process.Start("explorer.exe", path);
+                }
             }
             else
             {
-                lblBackupResult.Text = "\u274C Sao luu that bai!";
+                lblBackupResult.Text = "Sao lưu thất bại. Hãy kiểm tra lại quyền Administrator!";
                 lblBackupResult.ForeColor = Color.FromArgb(220, 38, 38);
-                AddBackupLog("THAT BAI", "Khong the sao luu driver");
+                AddBackupLog("Thất bại", "Không thể trích xuất driver qua pnputil");
             }
         }
 
         private async Task RestoreDriversAsync()
         {
             string path = txtRestorePath.Text.Trim();
-            if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) { MessageBox.Show("Thu muc khong ton tai!"); return; }
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+            {
+                MessageBox.Show("Thư mục chứa driver sao lưu không tồn tại!\nVui lòng chọn lại thư mục trên USB.", "Thông báo");
+                return;
+            }
 
             int count = 0;
             try { count = Directory.GetFiles(path, "*.inf", SearchOption.AllDirectories).Length; } catch { }
-            if (count == 0) { MessageBox.Show("Khong co file driver .inf nao!"); return; }
+            if (count == 0)
+            {
+                MessageBox.Show("Không tìm thấy file driver (.inf) nào trong thư mục đã chọn!", "Thông báo");
+                return;
+            }
 
-            if (MessageBox.Show(string.Format("Tim thay {0} driver. Khoi phuc tat ca khong can mang?", count),
-                "Xac nhan", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            if (MessageBox.Show(string.Format("Tìm thấy {0} file driver trong thư mục.\nBạn có muốn nạp lại toàn bộ vào máy tính ngay (không cần mạng)?", count),
+                "Xác nhận khôi phục", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             btnStartBackup.Enabled = false;
             btnStartRestore.Enabled = false;
-            lblBackupResult.Text = "\U0001F504 Dang khoi phuc toan bo driver...";
-            AddBackupLog("KHOI PHUC", string.Format("Bat dau khoi phuc {0} driver tu: {1}", count, path));
+            lblBackupResult.Text = "Đang nạp toàn bộ driver vào hệ thống...";
+            AddBackupLog("Khôi phục", string.Format("Bắt đầu nạp {0} driver từ: {1}", count, path));
 
             bool ok = false;
             await Task.Run(new Action(delegate()
@@ -1760,22 +1756,25 @@ namespace DriverChecker
 
             if (ok)
             {
-                lblBackupResult.Text = "\u2705 Khoi phuc driver thanh cong!";
+                lblBackupResult.Text = "Đã khôi phục driver thành công!";
                 lblBackupResult.ForeColor = Color.FromArgb(22, 163, 74);
-                AddBackupLog("THANH CONG", "Da khoi phuc tat ca driver vao may.");
-                if (MessageBox.Show("Khoi phuc thanh cong! Khoi dong lai may ngay?", "Thanh cong", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                    Process.Start("shutdown.exe", "/r /t 5");
+                AddBackupLog("Thành công", "Đã nạp toàn bộ driver vào Windows.");
+                if (MessageBox.Show("Khôi phục driver thành công!\nBạn có muốn khởi động lại máy để phần cứng hoạt động ổn định nhất?",
+                    "Thành công", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    Process.Start("shutdown.exe", "/r /t 5 /c \"Khởi động lại sau khi nạp driver.\"");
+                }
             }
             else
             {
-                lblBackupResult.Text = "\u274C Khoi phuc that bai!";
+                lblBackupResult.Text = "Khôi phục thất bại!";
                 lblBackupResult.ForeColor = Color.FromArgb(220, 38, 38);
-                AddBackupLog("THAT BAI", "Loi khi khoi phuc driver");
+                AddBackupLog("Thất bại", "Lỗi trong quá trình nạp driver bằng pnputil");
             }
         }
 
         // ================================================================
-        //  LOGIC: WINGET APP INSTALLER
+        //  LOGIC: CÀI ĐẶT ỨNG DỤNG QUA WINGET
         // ================================================================
         private async Task InstallSelectedAppsAsync()
         {
@@ -1789,7 +1788,11 @@ namespace DriverChecker
                 }
             }
 
-            if (selected.Count == 0) { MessageBox.Show("Vui long tick chon it nhat 1 ung dung!", "Thong bao"); return; }
+            if (selected.Count == 0)
+            {
+                MessageBox.Show("Vui lòng tích chọn ít nhất 1 ứng dụng cần cài đặt!", "Thông báo");
+                return;
+            }
 
             btnInstallApps.Enabled = false;
             prgApps.Visible = true;
@@ -1801,7 +1804,7 @@ namespace DriverChecker
 
             foreach (var app in selected)
             {
-                lblAppStatus.Text = string.Format("\u2B07 Dang cai: {0} ({1})...", app.Name, app.PackageId);
+                lblAppStatus.Text = string.Format("Đang tải & cài đặt: {0} ({1})...", app.Name, app.PackageId);
                 bool ok = await Task.Run(new Func<bool>(delegate()
                 {
                     try
@@ -1823,16 +1826,17 @@ namespace DriverChecker
 
             prgApps.Visible = false;
             btnInstallApps.Enabled = true;
-            lblAppStatus.Text = string.Format("\u2705 Hoan tat cai dat: {0} thanh cong, {1} that bai.", success, failed);
-            MessageBox.Show(string.Format("Cai dat ung dung hoan tat!\n\u2705 Thanh cong: {0}\n\u274C That bai: {1}", success, failed), "Thong bao");
+            lblAppStatus.Text = string.Format("Hoàn tất cài đặt ứng dụng: {0} thành công, {1} thất bại.", success, failed);
+            MessageBox.Show(string.Format("Cài đặt ứng dụng hoàn tất!\nThành công: {0}\nThất bại: {1}", success, failed),
+                "Thông báo kết quả", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         // ================================================================
-        //  LOGIC: FIX & OPTIMIZE TOOLS
+        //  LOGIC: SỬA LỖI & TỐI ƯU HỆ THỐNG
         // ================================================================
         private void RunCmdTool(string exe, string args, string toolName)
         {
-            AppendFixLog(string.Format("--- Bat dau chay {0} ---", toolName));
+            AppendFixLog(string.Format("=== Bắt đầu chạy: {0} ===", toolName));
             Task.Run(new Action(delegate()
             {
                 try
@@ -1850,48 +1854,51 @@ namespace DriverChecker
                         if (!string.IsNullOrEmpty(line)) AppendFixLog(line);
                     }
                     p.WaitForExit();
-                    AppendFixLog(string.Format("--- Hoan tat {0} (Ma thoat: {1}) ---\r\n", toolName, p.ExitCode));
+                    AppendFixLog(string.Format("=== Hoàn tất {0} (Mã thoát: {1}) ===\r\n", toolName, p.ExitCode));
                 }
                 catch (Exception ex)
                 {
-                    AppendFixLog("Loi: " + ex.Message);
+                    AppendFixLog("Lỗi: " + ex.Message);
                 }
             }));
         }
 
         private void ResetNetwork(object sender, EventArgs e)
         {
-            AppendFixLog("--- Bat dau Reset Mang ---");
+            AppendFixLog("=== Bắt đầu khôi phục cài đặt mạng (Reset Network) ===");
             Task.Run(new Action(delegate()
             {
                 try
                 {
                     var p1 = Process.Start(new ProcessStartInfo("netsh", "winsock reset") { UseShellExecute = false, CreateNoWindow = true });
                     p1.WaitForExit();
-                    AppendFixLog("Da reset Winsock Catalog.");
+                    AppendFixLog("Đã thiết lập lại Winsock Catalog.");
 
                     var p2 = Process.Start(new ProcessStartInfo("netsh", "int ip reset") { UseShellExecute = false, CreateNoWindow = true });
                     p2.WaitForExit();
-                    AppendFixLog("Da reset giao thuc TCP/IP.");
+                    AppendFixLog("Đã thiết lập lại giao thức TCP/IP.");
 
                     var p3 = Process.Start(new ProcessStartInfo("ipconfig", "/flushdns") { UseShellExecute = false, CreateNoWindow = true });
                     p3.WaitForExit();
-                    AppendFixLog("Da xoa sach Cache DNS.");
+                    AppendFixLog("Đã xóa sạch bộ nhớ đệm DNS Cache.");
 
-                    AppendFixLog("--- Reset mang thanh cong! Can khoi dong lai may. ---\r\n");
+                    AppendFixLog("=== Khôi phục mạng thành công! Cần khởi động lại máy để có hiệu lực. ===\r\n");
                     SafeInvoke(delegate()
                     {
-                        if (MessageBox.Show("Reset mang thanh cong! Ban co muon khoi dong lai may ngay?", "Thong bao", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                            Process.Start("shutdown.exe", "/r /t 5");
+                        if (MessageBox.Show("Khôi phục mạng thành công!\nBạn có muốn khởi động lại máy tính ngay để áp dụng?",
+                            "Thông báo", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                        {
+                            Process.Start("shutdown.exe", "/r /t 5 /c \"Khởi động lại sau khi reset mạng.\"");
+                        }
                     });
                 }
-                catch (Exception ex) { AppendFixLog("Loi reset mang: " + ex.Message); }
+                catch (Exception ex) { AppendFixLog("Lỗi: " + ex.Message); }
             }));
         }
 
         private void CleanTempFiles(object sender, EventArgs e)
         {
-            AppendFixLog("--- Bat dau don dep file rac Temp ---");
+            AppendFixLog("=== Bắt đầu dọn dẹp các tệp tin rác tạm thời ===");
             Task.Run(new Action(delegate()
             {
                 long cleaned = 0;
@@ -1920,17 +1927,18 @@ namespace DriverChecker
                 }
 
                 double mb = Math.Round((double)cleaned / (1024 * 1024), 1);
-                AppendFixLog(string.Format("Da giai phong khoang {0} MB dung luong o C!\r\n", mb));
+                AppendFixLog(string.Format("Đã dọn dẹp và giải phóng khoảng {0} MB dung lượng ổ C!\r\n", mb));
                 SafeInvoke(delegate()
                 {
-                    MessageBox.Show(string.Format("Da don sach file rac!\nGiai phong khoang {0} MB.", mb), "Thanh cong");
+                    MessageBox.Show(string.Format("Đã dọn dẹp xong!\nGiải phóng khoảng {0} MB dung lượng ổ C.", mb),
+                        "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 });
             }));
         }
 
         private void ResetWindowsUpdateService(object sender, EventArgs e)
         {
-            AppendFixLog("--- Reset dich vu Windows Update ---");
+            AppendFixLog("=== Đang khởi động lại dịch vụ Windows Update ===");
             Task.Run(new Action(delegate()
             {
                 try
@@ -1944,7 +1952,7 @@ namespace DriverChecker
                         try
                         {
                             foreach (var f in Directory.GetFiles(sDist)) { try { File.Delete(f); } catch { } }
-                            AppendFixLog("Da xoa bo nho dem cache tai update bi loi.");
+                            AppendFixLog("Đã xóa bộ nhớ đệm các gói tải về bị kẹt.");
                         }
                         catch { }
                     }
@@ -1952,13 +1960,14 @@ namespace DriverChecker
                     var p2 = Process.Start(new ProcessStartInfo("net", "start wuauserv") { UseShellExecute = false, CreateNoWindow = true });
                     p2.WaitForExit();
 
-                    AppendFixLog("Da khoi dong lai dich vu Windows Update thanh cong!\r\n");
+                    AppendFixLog("=== Đã khởi động lại dịch vụ Windows Update thành công! ===\r\n");
                     SafeInvoke(delegate()
                     {
-                        MessageBox.Show("Da reset Windows Update xong!", "Thanh cong");
+                        MessageBox.Show("Đã làm mới dịch vụ Windows Update thành công!", "Thành công",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
                     });
                 }
-                catch (Exception ex) { AppendFixLog("Loi: " + ex.Message); }
+                catch (Exception ex) { AppendFixLog("Lỗi: " + ex.Message); }
             }));
         }
 
@@ -1974,7 +1983,7 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  HELPERS
+        //  CÁC HÀM TIỆN ÍCH GIAO DIỆN
         // ================================================================
         private Panel CreateCardPanel(int x, int y, int w, int h)
         {
@@ -1987,7 +1996,6 @@ namespace DriverChecker
                 using (var pen = new Pen(CardBorder, 1))
                 {
                     e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                    // Draw clean rounded rectangle or line
                     e.Graphics.DrawRectangle(pen, 0, 0, pnl.Width - 1, pnl.Height - 1);
                 }
             };
@@ -1997,10 +2005,10 @@ namespace DriverChecker
         private Label CreateSpecsLabel(string title, string value, int x, int y)
         {
             var lbl = new Label();
-            lbl.Text = string.Format("{0,-16} {1}", title, value);
+            lbl.Text = string.Format("{0,-18} {1}", title, value);
             lbl.Location = new Point(x, y);
             lbl.AutoSize = true;
-            lbl.Font = new Font("Segoe UI", 9.2f);
+            lbl.Font = new Font("Segoe UI", 9.5f);
             lbl.ForeColor = TextSecondary;
             return lbl;
         }
@@ -2028,7 +2036,7 @@ namespace DriverChecker
             btn.FlatAppearance.BorderColor = CardBorder;
             btn.Cursor = Cursors.Hand;
             btn.TextAlign = ContentAlignment.TopLeft;
-            btn.Padding = new Padding(10, 8, 10, 8);
+            btn.Padding = new Padding(12, 10, 12, 10);
             btn.Text = string.Format("{0}\n{1}", title, subtitle);
             btn.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
             btn.ForeColor = TextPrimary;
@@ -2063,25 +2071,25 @@ namespace DriverChecker
 
         private void ExportReport(object sender, EventArgs e)
         {
-            if (deviceList.Count == 0) { MessageBox.Show("Chua co du lieu de xuat!", "Thong bao"); return; }
+            if (deviceList.Count == 0) { MessageBox.Show("Chưa có dữ liệu để xuất!", "Thông báo"); return; }
             using (var sfd = new SaveFileDialog())
             {
                 sfd.Filter = "Text File|*.txt";
-                sfd.FileName = string.Format("DriverReport_{0}_{1:yyyyMMdd_HHmmss}.txt", Environment.MachineName, DateTime.Now);
+                sfd.FileName = string.Format("BaoCaoDriver_{0}_{1:yyyyMMdd_HHmmss}.txt", Environment.MachineName, DateTime.Now);
                 if (sfd.ShowDialog() == DialogResult.OK)
                 {
                     var lines = new List<string>();
-                    lines.Add("=== BAO CAO DRIVER (DRIVER CHECKER v2.0) ===");
-                    lines.Add("May tinh: " + Environment.MachineName);
-                    lines.Add("Thoi gian: " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
-                    lines.Add("--------------------------------------------------");
+                    lines.Add("=== BÁO CÁO CẤU HÌNH & DRIVER (DRIVER CHECKER v2.0) ===");
+                    lines.Add("Tên máy tính: " + Environment.MachineName);
+                    lines.Add("Thời gian xuất: " + DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"));
+                    lines.Add("----------------------------------------------------------------------");
                     foreach (var d in deviceList)
                     {
-                        lines.Add(string.Format("[{0}] {1} | Current: {2} | New: {3} | Status: {4}",
+                        lines.Add(string.Format("[{0}] {1} | Hiện tại: {2} | Mới: {3} | Trạng thái: {4}",
                             d.Category, d.DeviceName, d.CurrentVersion, d.NewVersion, d.Status));
                     }
                     File.WriteAllLines(sfd.FileName, lines.ToArray(), Encoding.UTF8);
-                    MessageBox.Show("Da xuat bao cao: " + sfd.FileName, "Thanh cong");
+                    MessageBox.Show("Đã xuất báo cáo ra file: " + sfd.FileName, "Thành công");
                 }
             }
         }
