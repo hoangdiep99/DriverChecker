@@ -1095,9 +1095,9 @@ namespace DriverChecker
             };
 
             btnOpenGoogleSearch = new Button();
-            btnOpenGoogleSearch.Text = "Tìm kiếm Google Driver";
+            btnOpenGoogleSearch.Text = "Tìm trên Google";
             btnOpenGoogleSearch.Location = new Point(486, 4);
-            btnOpenGoogleSearch.Size = new Size(185, 36);
+            btnOpenGoogleSearch.Size = new Size(160, 36);
             btnOpenGoogleSearch.FlatStyle = FlatStyle.Flat;
             btnOpenGoogleSearch.FlatAppearance.BorderColor = CardBorder;
             btnOpenGoogleSearch.Font = new Font("Segoe UI", 9f);
@@ -1113,7 +1113,7 @@ namespace DriverChecker
 
             btnCopyHwId = new Button();
             btnCopyHwId.Text = "Sao chép Hardware ID";
-            btnCopyHwId.Location = new Point(678, 4);
+            btnCopyHwId.Location = new Point(654, 4);
             btnCopyHwId.Size = new Size(175, 36);
             btnCopyHwId.FlatStyle = FlatStyle.Flat;
             btnCopyHwId.FlatAppearance.BorderColor = CardBorder;
