@@ -147,6 +147,37 @@ namespace DriverChecker
         }
     }
 
+    // ======== Model thiết bị thiếu driver / Chấm than vàng ========
+    public class MissingDeviceItem
+    {
+        public string Name;
+        public string DeviceID;
+        public string HardwareID;
+        public string CleanHwId;
+        public uint ErrorCode;
+        public string ErrorDescription;
+        public string VendorName;
+        public string SuggestedDriver;
+        public string CatalogUrl;
+        public string VendorUrl;
+        public string GoogleUrl;
+
+        public MissingDeviceItem()
+        {
+            Name = "";
+            DeviceID = "";
+            HardwareID = "";
+            CleanHwId = "";
+            ErrorCode = 0;
+            ErrorDescription = "";
+            VendorName = "";
+            SuggestedDriver = "";
+            CatalogUrl = "";
+            VendorUrl = "";
+            GoogleUrl = "";
+        }
+    }
+
     // ======== Cửa sổ chính của chương trình ========
     public class MainForm : Form
     {
@@ -164,6 +195,10 @@ namespace DriverChecker
         private Button[] navButtons;
         private Panel[] contentPages;
         private int currentPageIndex = 0;
+
+        // Thông tin bo mạch chủ phát hiện được
+        private string mainboardManufacturer = "";
+        private string mainboardProduct = "";
 
         // --- Trang 1: Bảng điều khiển ---
         private Label lblPcName;
@@ -214,7 +249,23 @@ namespace DriverChecker
         private List<HardwareDevice> deviceList = new List<HardwareDevice>();
         private int updatesAvailable = 0;
 
-        // --- Trang 3: Sao lưu & Khôi phục (Tùy chọn) ---
+        // --- Trang 3: Cứu hộ Driver thiếu (Chấm than vàng) & Tra cứu Hardware ID ---
+        private ListView lvMissingDevices;
+        private Button btnScanMissing;
+        private Button btnScanAllHardware;
+        private TextBox txtManualHwId;
+        private Button btnManualLookup;
+        private Button btnOpenDeviceManager;
+        private Button btnOpenMbSupport;
+        private Label lblSelectedHwIdInfo;
+        private Button btnOpenMsCatalog;
+        private Button btnOpenVendorSite;
+        private Button btnOpenGoogleSearch;
+        private Button btnCopyHwId;
+        private List<MissingDeviceItem> missingDeviceList = new List<MissingDeviceItem>();
+        private MissingDeviceItem currentSelectedMissing = null;
+
+        // --- Trang 4: Sao lưu & Khôi phục (Tùy chọn) ---
         private TextBox txtBackupPath;
         private TextBox txtRestorePath;
         private Button btnStartBackup;
@@ -376,6 +427,7 @@ namespace DriverChecker
             string[] navTitles = {
                 "  Bảng điều khiển",
                 "  Kiểm tra Driver",
+                "  Tìm Driver thiếu (HWID)",
                 "  Sao lưu & Khôi phục",
                 "  Cài đặt ứng dụng"
             };
@@ -388,10 +440,10 @@ namespace DriverChecker
                 Button btn = new Button();
                 btn.Text = navTitles[i];
                 btn.Location = new Point(8, btnY);
-                btn.Size = new Size(204, 42);
+                btn.Size = new Size(204, 40);
                 btn.FlatStyle = FlatStyle.Flat;
                 btn.FlatAppearance.BorderSize = 0;
-                btn.Font = new Font("Segoe UI", 9.8f, FontStyle.Regular);
+                btn.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
                 btn.TextAlign = ContentAlignment.MiddleLeft;
                 btn.Padding = new Padding(12, 0, 0, 0);
                 btn.Cursor = Cursors.Hand;
@@ -401,7 +453,7 @@ namespace DriverChecker
 
                 navButtons[i] = btn;
                 sidebar.Controls.Add(btn);
-                btnY += 46;
+                btnY += 44;
             }
 
             Button btnLog = new Button();
@@ -425,8 +477,8 @@ namespace DriverChecker
             mainContainer.Dock = DockStyle.Fill;
             mainContainer.BackColor = BgColor;
 
-            contentPages = new Panel[4];
-            for (int i = 0; i < 4; i++)
+            contentPages = new Panel[5];
+            for (int i = 0; i < 5; i++)
             {
                 contentPages[i] = new Panel();
                 contentPages[i].Dock = DockStyle.Fill;
@@ -436,8 +488,9 @@ namespace DriverChecker
 
             BuildDashboardPage(contentPages[0]);
             BuildDriverPage(contentPages[1]);
-            BuildBackupPage(contentPages[2]);
-            BuildAppInstallerPage(contentPages[3]);
+            BuildMissingHardwarePage(contentPages[2]);
+            BuildBackupPage(contentPages[3]);
+            BuildAppInstallerPage(contentPages[4]);
 
             this.Controls.Add(mainContainer);
             this.Controls.Add(sidebar);
@@ -473,7 +526,11 @@ namespace DriverChecker
             {
                 Task.Run(async delegate() { await RunFullScanAsync(); });
             }
-            else if (index == 2 && oemDriverList.Count == 0)
+            else if (index == 2 && missingDeviceList.Count == 0)
+            {
+                Task.Run(async delegate() { await ScanMissingDevicesAsync(false); });
+            }
+            else if (index == 3 && oemDriverList.Count == 0)
             {
                 Task.Run(async delegate() { await LoadOemDriversAsync(); });
             }
@@ -845,7 +902,601 @@ namespace DriverChecker
         }
 
         // ================================================================
-        //  TRANG 3: SAO LƯU TÙY CHỌN & KHÔI PHỤC DRIVER (OFFLINE)
+        //  TRANG 3: CỨU HỘ DRIVER THIẾU (CHẤM THAN VÀNG) & HARDWARE ID
+        // ================================================================
+        private void BuildMissingHardwarePage(Panel page)
+        {
+            Panel topBar = new Panel();
+            topBar.Dock = DockStyle.Top;
+            topBar.Height = 115;
+            topBar.BackColor = CardBg;
+            topBar.Padding = new Padding(16, 10, 16, 8);
+            topBar.Paint += delegate(object s, PaintEventArgs e)
+            {
+                using (var pen = new Pen(CardBorder, 1))
+                    e.Graphics.DrawLine(pen, 0, topBar.Height - 1, topBar.Width, topBar.Height - 1);
+            };
+
+            // Hàng 1: Tiêu đề + Nút trang tải mainboard
+            Label lblTitle = new Label();
+            lblTitle.Text = "Cứu hộ Driver thiếu (Chấm than vàng) & Tra cứu Hardware ID";
+            lblTitle.Font = new Font("Segoe UI", 11.5f, FontStyle.Bold);
+            lblTitle.ForeColor = TextPrimary;
+            lblTitle.Location = new Point(12, 8);
+            lblTitle.AutoSize = true;
+
+            btnOpenMbSupport = CreateButton("Tải Driver Mainboard", Color.FromArgb(22, 163, 74), true);
+            btnOpenMbSupport.Location = new Point(topBar.Width - 280, 8);
+            btnOpenMbSupport.Size = new Size(260, 32);
+            btnOpenMbSupport.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            topBar.Resize += delegate(object s, EventArgs e) { btnOpenMbSupport.Location = new Point(topBar.Width - 280, 8); };
+            btnOpenMbSupport.Click += delegate(object s, EventArgs e)
+            {
+                string url = GetMotherboardSupportUrl();
+                try { Process.Start(url); } catch { }
+            };
+
+            Label lblSub = new Label();
+            lblSub.Text = "Tự động phát hiện mã lỗi Code 28, 10, ACPI, PCI, Unknown Device và dẫn link tải chuẩn từ Microsoft Catalog hoặc Hãng.";
+            lblSub.Font = new Font("Segoe UI", 8.8f);
+            lblSub.ForeColor = TextSecondary;
+            lblSub.Location = new Point(14, 32);
+            lblSub.AutoSize = true;
+
+            // Hàng 2: Các nút hành động + Ô tra cứu thủ công
+            btnScanMissing = CreateButton("Quét thiết bị thiếu Driver", PrimaryColor, true);
+            btnScanMissing.Location = new Point(12, 65);
+            btnScanMissing.Size = new Size(185, 36);
+            btnScanMissing.Click += async delegate(object s, EventArgs e)
+            {
+                await ScanMissingDevicesAsync(false);
+            };
+
+            btnScanAllHardware = new Button();
+            btnScanAllHardware.Text = "Hiện tất cả phần cứng";
+            btnScanAllHardware.Location = new Point(204, 65);
+            btnScanAllHardware.Size = new Size(155, 36);
+            btnScanAllHardware.FlatStyle = FlatStyle.Flat;
+            btnScanAllHardware.FlatAppearance.BorderColor = CardBorder;
+            btnScanAllHardware.Font = new Font("Segoe UI", 9f);
+            btnScanAllHardware.Cursor = Cursors.Hand;
+            btnScanAllHardware.Click += async delegate(object s, EventArgs e)
+            {
+                await ScanMissingDevicesAsync(true);
+            };
+
+            btnOpenDeviceManager = new Button();
+            btnOpenDeviceManager.Text = "Mở Device Manager";
+            btnOpenDeviceManager.Location = new Point(366, 65);
+            btnOpenDeviceManager.Size = new Size(145, 36);
+            btnOpenDeviceManager.FlatStyle = FlatStyle.Flat;
+            btnOpenDeviceManager.FlatAppearance.BorderColor = CardBorder;
+            btnOpenDeviceManager.Font = new Font("Segoe UI", 9f);
+            btnOpenDeviceManager.Cursor = Cursors.Hand;
+            btnOpenDeviceManager.Click += delegate(object s, EventArgs e)
+            {
+                try { Process.Start("devmgmt.msc"); } catch { }
+            };
+
+            Label lblManual = new Label();
+            lblManual.Text = "Mã ID:";
+            lblManual.Location = new Point(520, 74);
+            lblManual.AutoSize = true;
+            lblManual.Font = new Font("Segoe UI", 9f);
+            lblManual.ForeColor = TextSecondary;
+
+            txtManualHwId = new TextBox();
+            txtManualHwId.Font = new Font("Segoe UI", 9.2f);
+            txtManualHwId.Location = new Point(568, 70);
+            txtManualHwId.Size = new Size(230, 26);
+
+            btnManualLookup = new Button();
+            btnManualLookup.Text = "Tra cứu";
+            btnManualLookup.Location = new Point(804, 69);
+            btnManualLookup.Size = new Size(95, 28);
+            btnManualLookup.FlatStyle = FlatStyle.Flat;
+            btnManualLookup.FlatAppearance.BorderColor = PrimaryColor;
+            btnManualLookup.ForeColor = PrimaryColor;
+            btnManualLookup.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            btnManualLookup.Cursor = Cursors.Hand;
+            btnManualLookup.Click += delegate(object s, EventArgs e)
+            {
+                DoManualLookup(txtManualHwId.Text.Trim());
+            };
+
+            topBar.Controls.Add(lblTitle);
+            topBar.Controls.Add(btnOpenMbSupport);
+            topBar.Controls.Add(lblSub);
+            topBar.Controls.Add(btnScanMissing);
+            topBar.Controls.Add(btnScanAllHardware);
+            topBar.Controls.Add(btnOpenDeviceManager);
+            topBar.Controls.Add(lblManual);
+            topBar.Controls.Add(txtManualHwId);
+            topBar.Controls.Add(btnManualLookup);
+
+            // Bảng danh sách thiết bị
+            lvMissingDevices = new ListView();
+            lvMissingDevices.Dock = DockStyle.Fill;
+            lvMissingDevices.View = View.Details;
+            lvMissingDevices.FullRowSelect = true;
+            lvMissingDevices.GridLines = true;
+            lvMissingDevices.Font = new Font("Segoe UI", 9.2f);
+            lvMissingDevices.BackColor = CardBg;
+            lvMissingDevices.BorderStyle = BorderStyle.None;
+            lvMissingDevices.MultiSelect = false;
+
+            lvMissingDevices.Columns.Add("", 35, HorizontalAlignment.Center);
+            lvMissingDevices.Columns.Add("Trạng thái lỗi", 175);
+            lvMissingDevices.Columns.Add("Tên thiết bị (Device Name)", 240);
+            lvMissingDevices.Columns.Add("Mã Hardware ID chuẩn", 240);
+            lvMissingDevices.Columns.Add("Hãng sản xuất", 115);
+            lvMissingDevices.Columns.Add("Gói Driver khuyến nghị tải", 310);
+
+            lvMissingDevices.SelectedIndexChanged += delegate(object s, EventArgs e)
+            {
+                OnMissingDeviceSelected();
+            };
+
+            // Thanh điều khiển hành động bên dưới (Bottom Bar)
+            Panel btm = new Panel();
+            btm.Dock = DockStyle.Bottom;
+            btm.Height = 110;
+            btm.BackColor = Color.FromArgb(241, 245, 249);
+            btm.Padding = new Padding(16, 10, 16, 8);
+            btm.Paint += delegate(object s, PaintEventArgs e)
+            {
+                using (var pen = new Pen(CardBorder, 1))
+                    e.Graphics.DrawLine(pen, 0, 0, btm.Width, 0);
+            };
+
+            lblSelectedHwIdInfo = new Label();
+            lblSelectedHwIdInfo.Text = "Vui lòng bấm \"Quét thiết bị thiếu Driver\" hoặc chọn một thiết bị trong danh sách trên.";
+            lblSelectedHwIdInfo.Location = new Point(14, 12);
+            lblSelectedHwIdInfo.AutoSize = true;
+            lblSelectedHwIdInfo.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            lblSelectedHwIdInfo.ForeColor = TextPrimary;
+
+            Panel rowActionBtns = new Panel();
+            rowActionBtns.Location = new Point(12, 42);
+            rowActionBtns.Size = new Size(930, 50);
+
+            btnOpenMsCatalog = CreateButton("Tải từ Microsoft Update Catalog", PrimaryColor, true);
+            btnOpenMsCatalog.Location = new Point(0, 4);
+            btnOpenMsCatalog.Size = new Size(230, 36);
+            btnOpenMsCatalog.Enabled = false;
+            btnOpenMsCatalog.Click += delegate(object s, EventArgs e)
+            {
+                if (currentSelectedMissing != null && !string.IsNullOrEmpty(currentSelectedMissing.CatalogUrl))
+                {
+                    try { Process.Start(currentSelectedMissing.CatalogUrl); } catch { }
+                }
+            };
+
+            btnOpenVendorSite = CreateButton("Tải từ Trang chủ Hãng (Main/Chip)", Color.FromArgb(22, 163, 74), true);
+            btnOpenVendorSite.Location = new Point(238, 4);
+            btnOpenVendorSite.Size = new Size(240, 36);
+            btnOpenVendorSite.Enabled = false;
+            btnOpenVendorSite.Click += delegate(object s, EventArgs e)
+            {
+                if (currentSelectedMissing != null && !string.IsNullOrEmpty(currentSelectedMissing.VendorUrl))
+                {
+                    try { Process.Start(currentSelectedMissing.VendorUrl); } catch { }
+                }
+            };
+
+            btnOpenGoogleSearch = new Button();
+            btnOpenGoogleSearch.Text = "Tìm kiếm Google Driver";
+            btnOpenGoogleSearch.Location = new Point(486, 4);
+            btnOpenGoogleSearch.Size = new Size(185, 36);
+            btnOpenGoogleSearch.FlatStyle = FlatStyle.Flat;
+            btnOpenGoogleSearch.FlatAppearance.BorderColor = CardBorder;
+            btnOpenGoogleSearch.Font = new Font("Segoe UI", 9f);
+            btnOpenGoogleSearch.Cursor = Cursors.Hand;
+            btnOpenGoogleSearch.Enabled = false;
+            btnOpenGoogleSearch.Click += delegate(object s, EventArgs e)
+            {
+                if (currentSelectedMissing != null && !string.IsNullOrEmpty(currentSelectedMissing.GoogleUrl))
+                {
+                    try { Process.Start(currentSelectedMissing.GoogleUrl); } catch { }
+                }
+            };
+
+            btnCopyHwId = new Button();
+            btnCopyHwId.Text = "Sao chép Hardware ID";
+            btnCopyHwId.Location = new Point(678, 4);
+            btnCopyHwId.Size = new Size(175, 36);
+            btnCopyHwId.FlatStyle = FlatStyle.Flat;
+            btnCopyHwId.FlatAppearance.BorderColor = CardBorder;
+            btnCopyHwId.Font = new Font("Segoe UI", 9f);
+            btnCopyHwId.Cursor = Cursors.Hand;
+            btnCopyHwId.Enabled = false;
+            btnCopyHwId.Click += delegate(object s, EventArgs e)
+            {
+                if (currentSelectedMissing != null && !string.IsNullOrEmpty(currentSelectedMissing.CleanHwId))
+                {
+                    try
+                    {
+                        Clipboard.SetText(currentSelectedMissing.CleanHwId);
+                        MessageBox.Show("Đã sao chép mã Hardware ID vào bộ nhớ tạm (Clipboard):\n" + currentSelectedMissing.CleanHwId,
+                            "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch { }
+                }
+            };
+
+            rowActionBtns.Controls.Add(btnOpenMsCatalog);
+            rowActionBtns.Controls.Add(btnOpenVendorSite);
+            rowActionBtns.Controls.Add(btnOpenGoogleSearch);
+            rowActionBtns.Controls.Add(btnCopyHwId);
+
+            btm.Controls.Add(lblSelectedHwIdInfo);
+            btm.Controls.Add(rowActionBtns);
+
+            page.Controls.Add(lvMissingDevices);
+            page.Controls.Add(btm);
+            page.Controls.Add(topBar);
+        }
+
+        private void OnMissingDeviceSelected()
+        {
+            if (lvMissingDevices.SelectedItems.Count == 0)
+            {
+                currentSelectedMissing = null;
+                lblSelectedHwIdInfo.Text = "Vui lòng chọn một thiết bị trong danh sách trên.";
+                btnOpenMsCatalog.Enabled = false;
+                btnOpenVendorSite.Enabled = false;
+                btnOpenGoogleSearch.Enabled = false;
+                btnCopyHwId.Enabled = false;
+                return;
+            }
+
+            var item = lvMissingDevices.SelectedItems[0].Tag as MissingDeviceItem;
+            if (item == null) return;
+
+            currentSelectedMissing = item;
+            lblSelectedHwIdInfo.Text = string.Format("Đang chọn: {0} ({1})  |  Mã Hardware ID: {2}",
+                item.Name, item.VendorName, item.CleanHwId);
+
+            btnOpenMsCatalog.Enabled = true;
+            btnOpenVendorSite.Enabled = true;
+            btnOpenGoogleSearch.Enabled = true;
+            btnCopyHwId.Enabled = true;
+        }
+
+        private void DoManualLookup(string inputHwId)
+        {
+            if (string.IsNullOrEmpty(inputHwId))
+            {
+                MessageBox.Show("Vui lòng nhập hoặc dán mã Hardware ID cần tra cứu!\nVí dụ: PCI\\VEN_1022&DEV_1486", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var item = CreateMissingDeviceFromId("Thiết bị tra cứu thủ công", inputHwId, 28);
+            missingDeviceList.Insert(0, item);
+
+            var lvi = new ListViewItem("");
+            lvi.SubItems.Add(item.ErrorDescription);
+            lvi.SubItems.Add(item.Name);
+            lvi.SubItems.Add(item.CleanHwId);
+            lvi.SubItems.Add(item.VendorName);
+            lvi.SubItems.Add(item.SuggestedDriver);
+            lvi.ForeColor = Color.FromArgb(220, 38, 38);
+            lvi.Tag = item;
+
+            lvMissingDevices.Items.Insert(0, lvi);
+            lvi.Selected = true;
+            lvi.EnsureVisible();
+            OnMissingDeviceSelected();
+        }
+
+        private MissingDeviceItem CreateMissingDeviceFromId(string name, string rawHwId, uint errorCode)
+        {
+            var item = new MissingDeviceItem();
+            item.Name = string.IsNullOrEmpty(name) ? "Thiết bị không xác định" : name;
+            item.HardwareID = rawHwId ?? "";
+            item.CleanHwId = ExtractCleanHwId(item.HardwareID);
+            if (string.IsNullOrEmpty(item.CleanHwId)) item.CleanHwId = item.HardwareID;
+            item.ErrorCode = errorCode;
+            item.ErrorDescription = GetErrorCodeDescription(errorCode);
+            item.VendorName = DetectVendorName(item.CleanHwId);
+            item.SuggestedDriver = SuggestDriverPackage(item.Name, item.CleanHwId, item.VendorName);
+
+            item.CatalogUrl = "https://www.catalog.update.microsoft.com/Search.aspx?q=" + Uri.EscapeDataString(item.CleanHwId);
+            item.VendorUrl = GetVendorSupportUrl(item.VendorName);
+            item.GoogleUrl = "https://www.google.com/search?q=" + Uri.EscapeDataString(string.Format("\"{0}\" driver windows 11", item.CleanHwId));
+
+            return item;
+        }
+
+        private string GetVendorSupportUrl(string vendor)
+        {
+            if (vendor == "AMD") return "https://www.amd.com/en/support/download/drivers.html";
+            if (vendor == "Intel") return "https://www.intel.com/content/www/us/en/download-center/home.html";
+            if (vendor == "Realtek") return "https://www.realtek.com/en/component/zoo/advanced-search/508?Itemid=508";
+            if (vendor == "NVIDIA") return "https://www.nvidia.com/Download/index.aspx";
+            return GetMotherboardSupportUrl();
+        }
+
+        private string GetMotherboardSupportUrl()
+        {
+            string query = string.Format("{0} {1} driver download", mainboardManufacturer, mainboardProduct).Trim();
+            if (string.IsNullOrEmpty(query)) query = "bo mach chu driver support";
+            return "https://www.google.com/search?q=" + Uri.EscapeDataString(query);
+        }
+
+        private static string GetErrorCodeDescription(uint code)
+        {
+            switch (code)
+            {
+                case 0: return "Hoạt động bình thường";
+                case 1: return "Mã 1: Cấu hình sai / Thiếu inf";
+                case 10: return "Mã 10: Không thể khởi động thiết bị";
+                case 18: return "Mã 18: Yêu cầu cài đặt lại driver";
+                case 22: return "Mã 22: Thiết bị đang bị tắt (Disabled)";
+                case 28: return "Mã 28: Chưa có driver (Chấm than vàng)";
+                case 31: return "Mã 31: Không thể tải driver";
+                case 43: return "Mã 43: Windows dừng do phát hiện lỗi";
+                default: return string.Format("Mã {0}: Sự cố driver", code);
+            }
+        }
+
+        public static string ExtractCleanHwId(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            raw = raw.Trim();
+
+            // Trường hợp PCI: PCI\VEN_xxxx&DEV_yyyy...
+            int pciIdx = raw.IndexOf("PCI\\", StringComparison.OrdinalIgnoreCase);
+            if (pciIdx >= 0)
+            {
+                int venIdx = raw.IndexOf("VEN_", StringComparison.OrdinalIgnoreCase);
+                int devIdx = raw.IndexOf("DEV_", StringComparison.OrdinalIgnoreCase);
+                if (venIdx >= 0 && devIdx >= 0)
+                {
+                    try
+                    {
+                        string ven = raw.Substring(venIdx + 4, 4);
+                        string dev = raw.Substring(devIdx + 4, 4);
+                        return string.Format("PCI\\VEN_{0}&DEV_{1}", ven.ToUpper(), dev.ToUpper());
+                    }
+                    catch { }
+                }
+            }
+
+            // Trường hợp USB: USB\VID_xxxx&PID_yyyy...
+            int usbIdx = raw.IndexOf("USB\\", StringComparison.OrdinalIgnoreCase);
+            if (usbIdx >= 0)
+            {
+                int vidIdx = raw.IndexOf("VID_", StringComparison.OrdinalIgnoreCase);
+                int pidIdx = raw.IndexOf("PID_", StringComparison.OrdinalIgnoreCase);
+                if (vidIdx >= 0 && pidIdx >= 0)
+                {
+                    try
+                    {
+                        string vid = raw.Substring(vidIdx + 4, 4);
+                        string pid = raw.Substring(pidIdx + 4, 4);
+                        return string.Format("USB\\VID_{0}&PID_{1}", vid.ToUpper(), pid.ToUpper());
+                    }
+                    catch { }
+                }
+            }
+
+            // Trường hợp HDAUDIO
+            int hdIdx = raw.IndexOf("HDAUDIO\\", StringComparison.OrdinalIgnoreCase);
+            if (hdIdx >= 0)
+            {
+                int venIdx = raw.IndexOf("VEN_", StringComparison.OrdinalIgnoreCase);
+                int devIdx = raw.IndexOf("DEV_", StringComparison.OrdinalIgnoreCase);
+                if (venIdx >= 0 && devIdx >= 0)
+                {
+                    try
+                    {
+                        string ven = raw.Substring(venIdx + 4, 4);
+                        string dev = raw.Substring(devIdx + 4, 4);
+                        return string.Format("HDAUDIO\\VEN_{0}&DEV_{1}", ven.ToUpper(), dev.ToUpper());
+                    }
+                    catch { }
+                }
+            }
+
+            // Trường hợp ACPI: ACPI\VEN_xxxx&DEV_yyyy hoặc ACPI\PNPxxxx
+            int acpiIdx = raw.IndexOf("ACPI\\", StringComparison.OrdinalIgnoreCase);
+            if (acpiIdx >= 0)
+            {
+                string sub = raw.Substring(acpiIdx);
+                int amp = sub.IndexOf('&');
+                if (amp > 0)
+                {
+                    int nextAmp = sub.IndexOf('&', amp + 1);
+                    if (nextAmp > 0) return sub.Substring(0, nextAmp);
+                }
+                int slash = sub.IndexOf('\\', 5);
+                if (slash > 0) return sub.Substring(0, slash);
+                return sub;
+            }
+
+            return raw;
+        }
+
+        public static string DetectVendorName(string hwId)
+        {
+            if (string.IsNullOrEmpty(hwId)) return "Không rõ";
+            string upper = hwId.ToUpper();
+
+            if (upper.Contains("VEN_8086") || upper.Contains("VID_8086") || upper.Contains("VID_8087") || upper.Contains("VEN_INT")) return "Intel";
+            if (upper.Contains("VEN_1022") || upper.Contains("VID_1022") || upper.Contains("VEN_AMD") || upper.Contains("AMDI")) return "AMD";
+            if (upper.Contains("VEN_10DE") || upper.Contains("VID_10DE")) return "NVIDIA";
+            if (upper.Contains("VEN_10EC") || upper.Contains("VID_0BDA")) return "Realtek";
+            if (upper.Contains("VEN_1B21")) return "ASMedia";
+            if (upper.Contains("VEN_14E4")) return "Broadcom";
+            if (upper.Contains("VEN_168C")) return "Qualcomm Atheros";
+            if (upper.Contains("VEN_1043") || upper.Contains("ASUS")) return "ASUS";
+            if (upper.Contains("VEN_1458")) return "Gigabyte";
+            if (upper.Contains("VEN_1462")) return "MSI";
+            if (upper.Contains("VEN_1849")) return "ASRock";
+            if (upper.Contains("VEN_15B7")) return "Western Digital";
+            if (upper.Contains("VEN_144D")) return "Samsung";
+            if (upper.Contains("VEN_1344")) return "Micron / Crucial";
+            if (upper.Contains("VEN_1A56")) return "SK Hynix";
+            if (upper.Contains("VEN_1D6A")) return "Aquantia (Marvell)";
+            if (upper.Contains("VEN_8087")) return "Intel Bluetooth/Wi-Fi";
+            return "Phần cứng hệ thống";
+        }
+
+        public static string SuggestDriverPackage(string name, string hwId, string vendor)
+        {
+            string n = (name ?? "").ToLower();
+            string h = (hwId ?? "").ToUpper();
+
+            if (vendor == "AMD")
+            {
+                if (n.Contains("encryption") || n.Contains("psp") || h.Contains("DEV_1486") || h.Contains("DEV_1456"))
+                    return "AMD PSP 10.0/11.0 Device (Tải gói AMD Chipset Drivers)";
+                if (n.Contains("sm bus") || n.Contains("smbus") || h.Contains("DEV_790B"))
+                    return "AMD SMBus Controller (Tải gói AMD Chipset Drivers)";
+                if (n.Contains("gpio") || n.Contains("i2c") || h.Contains("DEV_1485"))
+                    return "AMD GPIO / I2C Controller (Tải gói AMD Chipset Drivers)";
+                return "Gói AMD Chipset & Bo mạch chủ (Tải từ amd.com)";
+            }
+            if (vendor == "Intel")
+            {
+                if (n.Contains("communications") || n.Contains("mei") || n.Contains("heci") || h.Contains("DEV_A360") || h.Contains("DEV_43E0"))
+                    return "Intel Management Engine Interface (Intel ME Driver)";
+                if (n.Contains("sm bus") || n.Contains("smbus") || n.Contains("chipset"))
+                    return "Intel Chipset Device Software (INF Update Utility)";
+                if (n.Contains("serial") || n.Contains("i2c") || n.Contains("spi") || n.Contains("gpio"))
+                    return "Intel Serial IO Driver";
+                if (n.Contains("rapid") || n.Contains("rst") || n.Contains("optane"))
+                    return "Intel Rapid Storage Technology (Intel RST Driver)";
+                return "Gói Intel Chipset & Bo mạch chủ (intel.com)";
+            }
+            if (vendor == "Realtek")
+            {
+                if (n.Contains("audio") || h.Contains("HDAUDIO") || h.Contains("DEV_0892") || h.Contains("DEV_1220"))
+                    return "Realtek High Definition Audio Driver";
+                if (n.Contains("ethernet") || n.Contains("lan") || n.Contains("pcie") || h.Contains("DEV_8168"))
+                    return "Realtek PCIe GbE Family Controller LAN Driver";
+                if (n.Contains("card reader") || h.Contains("DEV_5287"))
+                    return "Realtek PCIE Card Reader Driver";
+                return "Gói Driver Realtek chính hãng";
+            }
+            if (vendor == "ASMedia")
+            {
+                if (n.Contains("usb") || h.Contains("DEV_1142") || h.Contains("DEV_2142") || h.Contains("DEV_3142"))
+                    return "ASMedia USB 3.1 / 3.2 eXtensible Host Controller";
+                if (n.Contains("sata") || h.Contains("DEV_1061"))
+                    return "ASMedia SATA Controller Driver";
+                return "Driver điều khiển ASMedia";
+            }
+            if (h.Contains("ACPI\\ASUS") || n.Contains("atk"))
+                return "ASUS System Control Interface / ATK Package";
+
+            return "Driver chuẩn từ Microsoft Update Catalog theo mã Hardware ID";
+        }
+
+        private async Task ScanMissingDevicesAsync(bool showAll)
+        {
+            SafeInvoke(delegate()
+            {
+                btnScanMissing.Enabled = false;
+                btnScanAllHardware.Enabled = false;
+                lvMissingDevices.Items.Clear();
+                missingDeviceList.Clear();
+                lblSelectedHwIdInfo.Text = "Đang quét danh sách thiết bị phần cứng qua Windows WMI...";
+            });
+
+            var results = new List<MissingDeviceItem>();
+
+            await Task.Run(new Action(delegate()
+            {
+                try
+                {
+                    using (var searcher = new ManagementObjectSearcher("SELECT Name, DeviceID, HardwareID, ConfigManagerErrorCode, PNPClass, Manufacturer, Description FROM Win32_PnPEntity"))
+                    {
+                        foreach (ManagementObject obj in searcher.Get())
+                        {
+                            try
+                            {
+                                string name = (obj["Name"] ?? "").ToString().Trim();
+                                string devId = (obj["DeviceID"] ?? "").ToString().Trim();
+                                string[] hwIds = obj["HardwareID"] as string[];
+                                string rawHwId = (hwIds != null && hwIds.Length > 0) ? hwIds[0] : devId;
+                                uint errCode = (obj["ConfigManagerErrorCode"] != null) ? Convert.ToUInt32(obj["ConfigManagerErrorCode"]) : 0;
+
+                                bool isProblem = (errCode == 28 || errCode == 10 || errCode == 1 || errCode == 18 || errCode == 31 || errCode == 43 || (errCode != 0 && errCode != 22));
+                                bool isUnknown = (name.IndexOf("unknown", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                                  name.IndexOf("không xác định", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                                  name.IndexOf("pci device", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                                  name.IndexOf("sm bus", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                                if (showAll || isProblem || isUnknown)
+                                {
+                                    var item = CreateMissingDeviceFromId(name, rawHwId, errCode);
+                                    results.Add(item);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("Lỗi quét missing devices: " + ex.Message);
+                }
+            }));
+
+            SafeInvoke(delegate()
+            {
+                lvMissingDevices.BeginUpdate();
+                lvMissingDevices.Items.Clear();
+                missingDeviceList = results;
+
+                if (results.Count == 0 && !showAll)
+                {
+                    lblSelectedHwIdInfo.Text = "Tuyệt vời! Máy tính của bạn không có thiết bị nào bị thiếu Driver (Không có chấm than vàng).";
+                    var lvi = new ListViewItem("");
+                    lvi.SubItems.Add("Hoàn hảo");
+                    lvi.SubItems.Add("Tất cả thiết bị phần cứng đều đã nhận đủ Driver chuẩn");
+                    lvi.SubItems.Add("Không có lỗi");
+                    lvi.SubItems.Add("OK");
+                    lvi.SubItems.Add("Hệ thống hoạt động tốt");
+                    lvi.ForeColor = Color.FromArgb(22, 163, 74);
+                    lvMissingDevices.Items.Add(lvi);
+                }
+                else
+                {
+                    foreach (var dev in results)
+                    {
+                        var lvi = new ListViewItem("");
+                        lvi.SubItems.Add(dev.ErrorDescription);
+                        lvi.SubItems.Add(dev.Name);
+                        lvi.SubItems.Add(dev.CleanHwId);
+                        lvi.SubItems.Add(dev.VendorName);
+                        lvi.SubItems.Add(dev.SuggestedDriver);
+                        lvi.Tag = dev;
+
+                        if (dev.ErrorCode == 28 || dev.ErrorCode == 10 || dev.ErrorCode == 31)
+                            lvi.ForeColor = Color.FromArgb(220, 38, 38);
+                        else if (dev.ErrorCode == 22)
+                            lvi.ForeColor = Color.FromArgb(180, 83, 9);
+                        else
+                            lvi.ForeColor = TextPrimary;
+
+                        lvMissingDevices.Items.Add(lvi);
+                    }
+
+                    lblSelectedHwIdInfo.Text = string.Format("Đã tìm thấy {0} thiết bị {1}. Bấm vào thiết bị để lấy link tải chuẩn.",
+                        results.Count, showAll ? "phần cứng trên máy" : "có lỗi / thiếu driver");
+                }
+
+                lvMissingDevices.EndUpdate();
+                btnScanMissing.Enabled = true;
+                btnScanAllHardware.Enabled = true;
+            });
+        }
+
+        // ================================================================
+        //  TRANG 4: SAO LƯU TÙY CHỌN & KHÔI PHỤC DRIVER (OFFLINE)
         // ================================================================
         private void BuildBackupPage(Panel page)
         {
@@ -1506,9 +2157,17 @@ namespace DriverChecker
                     {
                         string mfr = (obj["Manufacturer"] ?? "").ToString().Replace("ASUSTeK COMPUTER INC.", "ASUS").Trim();
                         string prod = (obj["Product"] ?? "").ToString().Trim();
+                        mainboardManufacturer = mfr;
+                        mainboardProduct = prod;
                         SafeInvoke(delegate()
                         {
                             lblMainboardInfo.Text = string.Format("Bo mạch chủ:        {0} {1}", mfr, prod);
+                            if (btnOpenMbSupport != null)
+                            {
+                                string name = (mfr + " " + prod).Trim();
+                                if (name.Length > 25) name = name.Substring(0, 25) + "...";
+                                btnOpenMbSupport.Text = "Tải Driver Main (" + name + ")";
+                            }
                         });
                     }
 
