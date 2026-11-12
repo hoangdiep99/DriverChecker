@@ -924,12 +924,13 @@ namespace DriverChecker
             lblTitle.ForeColor = TextPrimary;
             lblTitle.Location = new Point(12, 8);
             lblTitle.AutoSize = true;
+            lblTitle.UseMnemonic = false;
 
             btnOpenMbSupport = CreateButton("Tải Driver Mainboard", Color.FromArgb(22, 163, 74), true);
-            btnOpenMbSupport.Location = new Point(topBar.Width - 280, 8);
-            btnOpenMbSupport.Size = new Size(260, 32);
             btnOpenMbSupport.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            topBar.Resize += delegate(object s, EventArgs e) { btnOpenMbSupport.Location = new Point(topBar.Width - 280, 8); };
+            btnOpenMbSupport.Size = new Size(240, 32);
+            btnOpenMbSupport.Location = new Point(topBar.Width - 255, 8);
+            topBar.Resize += delegate(object s, EventArgs e) { btnOpenMbSupport.Location = new Point(topBar.Width - 255, 8); };
             btnOpenMbSupport.Click += delegate(object s, EventArgs e)
             {
                 string url = GetMotherboardSupportUrl();
@@ -942,6 +943,7 @@ namespace DriverChecker
             lblSub.ForeColor = TextSecondary;
             lblSub.Location = new Point(14, 32);
             lblSub.AutoSize = true;
+            lblSub.UseMnemonic = false;
 
             // Hàng 2: Các nút hành động + Ô tra cứu thủ công
             btnScanMissing = CreateButton("Quét thiết bị thiếu Driver", PrimaryColor, true);
@@ -1036,6 +1038,13 @@ namespace DriverChecker
             {
                 OnMissingDeviceSelected();
             };
+            lvMissingDevices.DoubleClick += delegate(object s, EventArgs e)
+            {
+                if (currentSelectedMissing != null && !string.IsNullOrEmpty(currentSelectedMissing.CatalogUrl))
+                {
+                    try { Process.Start(currentSelectedMissing.CatalogUrl); } catch { }
+                }
+            };
 
             // Thanh điều khiển hành động bên dưới (Bottom Bar)
             Panel btm = new Panel();
@@ -1055,6 +1064,7 @@ namespace DriverChecker
             lblSelectedHwIdInfo.AutoSize = true;
             lblSelectedHwIdInfo.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
             lblSelectedHwIdInfo.ForeColor = TextPrimary;
+            lblSelectedHwIdInfo.UseMnemonic = false;
 
             Panel rowActionBtns = new Panel();
             rowActionBtns.Location = new Point(12, 42);
@@ -2164,9 +2174,9 @@ namespace DriverChecker
                             lblMainboardInfo.Text = string.Format("Bo mạch chủ:        {0} {1}", mfr, prod);
                             if (btnOpenMbSupport != null)
                             {
-                                string name = (mfr + " " + prod).Trim();
-                                if (name.Length > 25) name = name.Substring(0, 25) + "...";
-                                btnOpenMbSupport.Text = "Tải Driver Main (" + name + ")";
+                                string name = prod.Trim();
+                                if (name.Length > 18) name = name.Substring(0, 16) + "...";
+                                btnOpenMbSupport.Text = "Driver Main (" + name + ")";
                             }
                         });
                     }
