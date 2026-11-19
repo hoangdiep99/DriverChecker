@@ -213,6 +213,10 @@ namespace DriverChecker
         private Button btnGpuDirectLink;
         private string gpuVendor = "";
         private string gpuDirectUrl = "";
+        private string cpuName = "";
+        private string chipsetVendor = "";
+        private string chipsetPortalUrl = "";
+        private Button btnChipsetDownload;
 
         // 3 Đồng hồ tròn hiệu năng
         private Panel pnlGaugeCpu;
@@ -257,7 +261,10 @@ namespace DriverChecker
         private Button btnManualLookup;
         private Button btnOpenDeviceManager;
         private Button btnOpenMbSupport;
+        private Button btnChipsetDriver;
         private Label lblSelectedHwIdInfo;
+        private ProgressBar prgMissing;
+        private Button btnDirectInstallCab;
         private Button btnOpenMsCatalog;
         private Button btnOpenVendorSite;
         private Button btnOpenGoogleSearch;
@@ -581,6 +588,23 @@ namespace DriverChecker
             lblMainboardInfo = CreateSpecsLabel("Bo mạch chủ:", "Đang nạp...", 470, 72);
             lblUptime = CreateSpecsLabel("Thời gian mở máy:", "Đang nạp...", 470, 96);
 
+            btnChipsetDownload = new Button();
+            btnChipsetDownload.Text = "Tải Chipset";
+            btnChipsetDownload.Location = new Point(735, 48);
+            btnChipsetDownload.Size = new Size(145, 32);
+            btnChipsetDownload.FlatStyle = FlatStyle.Flat;
+            btnChipsetDownload.BackColor = PrimaryColor;
+            btnChipsetDownload.ForeColor = Color.White;
+            btnChipsetDownload.FlatAppearance.BorderSize = 0;
+            btnChipsetDownload.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            btnChipsetDownload.Cursor = Cursors.Hand;
+            btnChipsetDownload.Visible = false;
+            btnChipsetDownload.Click += delegate(object s, EventArgs e)
+            {
+                if (!string.IsNullOrEmpty(chipsetPortalUrl)) Process.Start(chipsetPortalUrl);
+                else MessageBox.Show("Chưa xác định được link chipset của hãng.", "Thông báo");
+            };
+
             btnGpuDirectLink = new Button();
             btnGpuDirectLink.Text = "Tải từ NVIDIA.com";
             btnGpuDirectLink.Location = new Point(735, 90);
@@ -606,6 +630,7 @@ namespace DriverChecker
             cardSpecs.Controls.Add(lblRamInfo);
             cardSpecs.Controls.Add(lblMainboardInfo);
             cardSpecs.Controls.Add(lblUptime);
+            cardSpecs.Controls.Add(btnChipsetDownload);
             cardSpecs.Controls.Add(btnGpuDirectLink);
             page.Controls.Add(cardSpecs);
 
@@ -928,14 +953,32 @@ namespace DriverChecker
 
             btnOpenMbSupport = CreateButton("Tải Driver Mainboard", Color.FromArgb(22, 163, 74), true);
             btnOpenMbSupport.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnOpenMbSupport.Size = new Size(240, 32);
-            btnOpenMbSupport.Location = new Point(topBar.Width - 255, 8);
-            topBar.Resize += delegate(object s, EventArgs e) { btnOpenMbSupport.Location = new Point(topBar.Width - 255, 8); };
+            btnOpenMbSupport.Size = new Size(230, 32);
+            btnOpenMbSupport.Location = new Point(topBar.Width - 245, 8);
             btnOpenMbSupport.Click += delegate(object s, EventArgs e)
             {
                 string url = GetMotherboardSupportUrl();
                 try { Process.Start(url); } catch { }
             };
+
+            btnChipsetDriver = CreateButton("Tải Chipset", PrimaryColor, true);
+            btnChipsetDriver.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnChipsetDriver.Size = new Size(160, 32);
+            btnChipsetDriver.Location = new Point(topBar.Width - 415, 8);
+            btnChipsetDriver.Visible = false;
+            btnChipsetDriver.Click += delegate(object s, EventArgs e)
+            {
+                if (!string.IsNullOrEmpty(chipsetPortalUrl)) Process.Start(chipsetPortalUrl);
+                else MessageBox.Show("Chưa xác định được link chipset của hãng.", "Thông báo");
+            };
+
+            topBar.Resize += delegate(object s, EventArgs e)
+            {
+                btnOpenMbSupport.Location = new Point(topBar.Width - 245, 8);
+                btnChipsetDriver.Location = new Point(topBar.Width - 415, 8);
+            };
+
+            topBar.Controls.Add(btnChipsetDriver);
 
             Label lblSub = new Label();
             lblSub.Text = "Tự động phát hiện mã lỗi Code 28, 10, ACPI, PCI, Unknown Device và dẫn link tải chuẩn từ Microsoft Catalog hoặc Hãng.";
@@ -1066,13 +1109,30 @@ namespace DriverChecker
             lblSelectedHwIdInfo.ForeColor = TextPrimary;
             lblSelectedHwIdInfo.UseMnemonic = false;
 
+            prgMissing = new ProgressBar();
+            prgMissing.Size = new Size(240, 18);
+            prgMissing.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+            prgMissing.Location = new Point(btm.Width - 260, 10);
+            prgMissing.Visible = false;
+            btm.Resize += delegate(object s, EventArgs e) { prgMissing.Location = new Point(btm.Width - 260, 10); };
+            btm.Controls.Add(prgMissing);
+
             Panel rowActionBtns = new Panel();
             rowActionBtns.Location = new Point(12, 42);
             rowActionBtns.Size = new Size(930, 50);
 
-            btnOpenMsCatalog = CreateButton("Tải từ Microsoft Update Catalog", PrimaryColor, true);
-            btnOpenMsCatalog.Location = new Point(0, 4);
-            btnOpenMsCatalog.Size = new Size(230, 36);
+            btnDirectInstallCab = CreateButton("Cài trực tiếp (.CAB)", Color.FromArgb(220, 38, 38), true);
+            btnDirectInstallCab.Location = new Point(0, 4);
+            btnDirectInstallCab.Size = new Size(180, 36);
+            btnDirectInstallCab.Enabled = false;
+            btnDirectInstallCab.Click += async delegate(object s, EventArgs e)
+            {
+                await InstallDriverFromCatalogAsync(currentSelectedMissing);
+            };
+
+            btnOpenMsCatalog = CreateButton("Mở Microsoft Catalog", PrimaryColor, false);
+            btnOpenMsCatalog.Location = new Point(188, 4);
+            btnOpenMsCatalog.Size = new Size(175, 36);
             btnOpenMsCatalog.Enabled = false;
             btnOpenMsCatalog.Click += delegate(object s, EventArgs e)
             {
@@ -1082,9 +1142,9 @@ namespace DriverChecker
                 }
             };
 
-            btnOpenVendorSite = CreateButton("Tải từ Trang chủ Hãng (Main/Chip)", Color.FromArgb(22, 163, 74), true);
-            btnOpenVendorSite.Location = new Point(238, 4);
-            btnOpenVendorSite.Size = new Size(240, 36);
+            btnOpenVendorSite = CreateButton("Trang chủ Hãng (Main/Chip)", Color.FromArgb(22, 163, 74), true);
+            btnOpenVendorSite.Location = new Point(371, 4);
+            btnOpenVendorSite.Size = new Size(205, 36);
             btnOpenVendorSite.Enabled = false;
             btnOpenVendorSite.Click += delegate(object s, EventArgs e)
             {
@@ -1096,8 +1156,8 @@ namespace DriverChecker
 
             btnOpenGoogleSearch = new Button();
             btnOpenGoogleSearch.Text = "Tìm trên Google";
-            btnOpenGoogleSearch.Location = new Point(486, 4);
-            btnOpenGoogleSearch.Size = new Size(160, 36);
+            btnOpenGoogleSearch.Location = new Point(584, 4);
+            btnOpenGoogleSearch.Size = new Size(140, 36);
             btnOpenGoogleSearch.FlatStyle = FlatStyle.Flat;
             btnOpenGoogleSearch.FlatAppearance.BorderColor = CardBorder;
             btnOpenGoogleSearch.Font = new Font("Segoe UI", 9f);
@@ -1112,9 +1172,9 @@ namespace DriverChecker
             };
 
             btnCopyHwId = new Button();
-            btnCopyHwId.Text = "Sao chép Hardware ID";
-            btnCopyHwId.Location = new Point(654, 4);
-            btnCopyHwId.Size = new Size(175, 36);
+            btnCopyHwId.Text = "Sao chép HWID";
+            btnCopyHwId.Location = new Point(732, 4);
+            btnCopyHwId.Size = new Size(150, 36);
             btnCopyHwId.FlatStyle = FlatStyle.Flat;
             btnCopyHwId.FlatAppearance.BorderColor = CardBorder;
             btnCopyHwId.Font = new Font("Segoe UI", 9f);
@@ -1134,6 +1194,7 @@ namespace DriverChecker
                 }
             };
 
+            rowActionBtns.Controls.Add(btnDirectInstallCab);
             rowActionBtns.Controls.Add(btnOpenMsCatalog);
             rowActionBtns.Controls.Add(btnOpenVendorSite);
             rowActionBtns.Controls.Add(btnOpenGoogleSearch);
@@ -1147,12 +1208,169 @@ namespace DriverChecker
             page.Controls.Add(topBar);
         }
 
+        private async Task InstallDriverFromCatalogAsync(MissingDeviceItem item)
+        {
+            if (item == null || string.IsNullOrEmpty(item.CleanHwId))
+            {
+                MessageBox.Show("Vui lòng chọn một thiết bị có mã Hardware ID hợp lệ!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string hwId = item.CleanHwId;
+            btnDirectInstallCab.Enabled = false;
+            prgMissing.Visible = true;
+            prgMissing.Style = ProgressBarStyle.Marquee;
+            lblSelectedHwIdInfo.Text = string.Format("Đang tìm kiếm gói driver .CAB cho {0} trên Microsoft Catalog...", hwId);
+
+            bool ok = await Task.Run(new Func<bool>(delegate()
+            {
+                try
+                {
+                    ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
+                    string searchUrl = "https://www.catalog.update.microsoft.com/Search.aspx?q=" + Uri.EscapeDataString(hwId);
+                    string searchHtml = "";
+
+                    using (var wc = new WebClient())
+                    {
+                        wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                        searchHtml = wc.DownloadString(searchUrl);
+                    }
+
+                    var matches = System.Text.RegularExpressions.Regex.Matches(searchHtml, @"id=""([a-f0-9\-]{36})""\s+class=""flatBlueButtonDownload");
+                    if (matches.Count == 0)
+                    {
+                        int devPos = hwId.IndexOf("&DEV_", StringComparison.OrdinalIgnoreCase);
+                        if (devPos > 0 && devPos + 9 <= hwId.Length)
+                        {
+                            string shortId = hwId.Substring(0, devPos + 9);
+                            if (shortId != hwId)
+                            {
+                                using (var wc = new WebClient())
+                                {
+                                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                                    searchHtml = wc.DownloadString("https://www.catalog.update.microsoft.com/Search.aspx?q=" + Uri.EscapeDataString(shortId));
+                                    matches = System.Text.RegularExpressions.Regex.Matches(searchHtml, @"id=""([a-f0-9\-]{36})""\s+class=""flatBlueButtonDownload");
+                                }
+                            }
+                        }
+                    }
+
+                    if (matches.Count == 0)
+                    {
+                        SafeInvoke(delegate()
+                        {
+                            lblSelectedHwIdInfo.Text = "Không tìm thấy file .CAB trực tiếp trên Microsoft Catalog. Bạn có thể mở link web bằng nút bên cạnh.";
+                        });
+                        return false;
+                    }
+
+                    string uid = matches[0].Groups[1].Value;
+
+                    SafeInvoke(delegate()
+                    {
+                        lblSelectedHwIdInfo.Text = "Đang lấy link tải trực tiếp từ máy chủ Microsoft...";
+                    });
+
+                    string dialogUrl = "https://www.catalog.update.microsoft.com/DownloadDialog.aspx";
+                    string postBody = "updateIDs=[{\"size\":0,\"languages\":\"\",\"uidInfo\":\"" + uid + "\",\"updateID\":\"" + uid + "\"}]";
+                    string dialogHtml = "";
+
+                    using (var wc = new WebClient())
+                    {
+                        wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                        wc.Headers.Add("Content-Type", "application/x-www-form-urlencoded");
+                        dialogHtml = wc.UploadString(dialogUrl, "POST", postBody);
+                    }
+
+                    var cabMatches = System.Text.RegularExpressions.Regex.Matches(dialogHtml, @"https?://[^\s""'<>]+\.(cab|exe)");
+                    if (cabMatches.Count == 0)
+                    {
+                        SafeInvoke(delegate()
+                        {
+                            lblSelectedHwIdInfo.Text = "Không bóc tách được link .CAB từ Microsoft. Hãy dùng nút \"Mở Microsoft Catalog\".";
+                        });
+                        return false;
+                    }
+
+                    string cabUrl = cabMatches[0].Value;
+
+                    string tempDir = Path.Combine(Path.GetTempPath(), "DriverChecker_Cab");
+                    if (Directory.Exists(tempDir))
+                    {
+                        try { Directory.Delete(tempDir, true); } catch { }
+                    }
+                    Directory.CreateDirectory(tempDir);
+
+                    string cabFile = Path.Combine(tempDir, "driver.cab");
+                    string extractDir = Path.Combine(tempDir, "extracted");
+                    Directory.CreateDirectory(extractDir);
+
+                    SafeInvoke(delegate()
+                    {
+                        lblSelectedHwIdInfo.Text = "Đang tải file .CAB từ Microsoft Catalog: " + Path.GetFileName(cabUrl);
+                    });
+
+                    using (var wc = new WebClient())
+                    {
+                        wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                        wc.DownloadFile(cabUrl, cabFile);
+                    }
+
+                    SafeInvoke(delegate()
+                    {
+                        lblSelectedHwIdInfo.Text = "Đang giải nén gói Driver .CAB (expand.exe)...";
+                    });
+
+                    var psiExp = new ProcessStartInfo("expand.exe", string.Format("-F:* \"{0}\" \"{1}\"", cabFile, extractDir));
+                    psiExp.UseShellExecute = false;
+                    psiExp.CreateNoWindow = true;
+                    var pExp = Process.Start(psiExp);
+                    pExp.WaitForExit();
+
+                    SafeInvoke(delegate()
+                    {
+                        lblSelectedHwIdInfo.Text = "Đang nạp và kích hoạt Driver vào Windows (pnputil /add-driver /install)...";
+                    });
+
+                    var psiPnp = new ProcessStartInfo("pnputil.exe", string.Format("/add-driver \"{0}\\*.inf\" /install", extractDir));
+                    psiPnp.UseShellExecute = false;
+                    psiPnp.CreateNoWindow = true;
+                    var pPnp = Process.Start(psiPnp);
+                    pPnp.WaitForExit();
+
+                    return (pPnp.ExitCode == 0 || pPnp.ExitCode == 3010);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("Lỗi Direct Install CAB: " + ex.Message);
+                    return false;
+                }
+            }));
+
+            prgMissing.Visible = false;
+            btnDirectInstallCab.Enabled = true;
+
+            if (ok)
+            {
+                lblSelectedHwIdInfo.Text = "Cài đặt Driver thành công! Thiết bị đã được Windows nhận diện và kích hoạt.";
+                MessageBox.Show("Đã tải và cài đặt Driver chính thức từ Microsoft thành công!\nThiết bị đã được nạp driver và kích hoạt trong hệ thống.",
+                    "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await ScanMissingDevicesAsync(false);
+            }
+            else
+            {
+                MessageBox.Show("Không thể tự động nạp gói .CAB này (có thể thiết bị yêu cầu bộ cài riêng của hãng).\nVui lòng dùng nút \"Mở Microsoft Catalog\" hoặc \"Trang chủ Hãng\".",
+                    "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         private void OnMissingDeviceSelected()
         {
             if (lvMissingDevices.SelectedItems.Count == 0)
             {
                 currentSelectedMissing = null;
                 lblSelectedHwIdInfo.Text = "Vui lòng chọn một thiết bị trong danh sách trên.";
+                if (btnDirectInstallCab != null) btnDirectInstallCab.Enabled = false;
                 btnOpenMsCatalog.Enabled = false;
                 btnOpenVendorSite.Enabled = false;
                 btnOpenGoogleSearch.Enabled = false;
@@ -1167,6 +1385,7 @@ namespace DriverChecker
             lblSelectedHwIdInfo.Text = string.Format("Đang chọn: {0} ({1})  |  Mã Hardware ID: {2}",
                 item.Name, item.VendorName, item.CleanHwId);
 
+            if (btnDirectInstallCab != null) btnDirectInstallCab.Enabled = true;
             btnOpenMsCatalog.Enabled = true;
             btnOpenVendorSite.Enabled = true;
             btnOpenGoogleSearch.Enabled = true;
@@ -2084,6 +2303,8 @@ namespace DriverChecker
         private void InitDefaultApps()
         {
             appList.Clear();
+            appList.Add(new WingetApp("Visual C++ All-in-One (2005 - 2022)", "abbodi1406.vcredist", "Bổ trợ Game & Đồ họa", "Trọn bộ thư viện Visual C++ 2005-2022 (x86 & x64), sửa triệt để lỗi thiếu file DLL", true, "https://github.com/abbodi1406/vcredist/releases/latest/download/VisualCppRedist_AIO_x86_x64.exe"));
+            appList.Add(new WingetApp("DirectX End-User Runtimes", "Microsoft.DirectX", "Bổ trợ Game & Đồ họa", "Thư viện đồ họa DirectX 9, 10, 11 chính hãng Microsoft, khắc phục lỗi thiếu d3dx9/d3dx11 dll", true, "https://download.microsoft.com/download/1/7/1/1718CCC4-6315-4D8E-9543-8E28A4E18C4C/dxwebsetup.exe"));
             appList.Add(new WingetApp("UniKey", "UniKey.UniKey", "Gõ tiếng Việt", "Bộ gõ tiếng Việt chuẩn và nhẹ nhất cho Windows", true));
             appList.Add(new WingetApp("Google Chrome", "Google.Chrome", "Trình duyệt Web", "Trình duyệt web thông dụng, đồng bộ tài khoản Google", true));
             appList.Add(new WingetApp("7-Zip", "7zip.7zip", "Nén & Giải nén", "Phần mềm giải nén file siêu nhẹ, mở mọi định dạng", true));
@@ -2144,10 +2365,34 @@ namespace DriverChecker
                         string name = (obj["Name"] ?? "").ToString().Trim();
                         int cores = Convert.ToInt32(obj["NumberOfCores"] ?? 0);
                         int threads = Convert.ToInt32(obj["NumberOfLogicalProcessors"] ?? 0);
+                        cpuName = name;
+
+                        string lowerCpu = name.ToLower();
+                        if (lowerCpu.Contains("amd") || lowerCpu.Contains("ryzen") || lowerCpu.Contains("athlon"))
+                        {
+                            chipsetVendor = "AMD";
+                            chipsetPortalUrl = "https://www.amd.com/en/support/download/drivers.html";
+                        }
+                        else if (lowerCpu.Contains("intel") || lowerCpu.Contains("core") || lowerCpu.Contains("xeon"))
+                        {
+                            chipsetVendor = "Intel";
+                            chipsetPortalUrl = "https://www.intel.com/content/www/us/en/download/19347/chipset-inf-utility.html";
+                        }
+
                         SafeInvoke(delegate()
                         {
                             lblCpuInfo.Text = string.Format("Bộ vi xử lý:        {0} ({1} nhân, {2} luồng)", name, cores, threads);
                             cpuSubtext = string.Format("{0} nhân, {1} luồng", cores, threads);
+                            if (btnChipsetDownload != null && !string.IsNullOrEmpty(chipsetVendor))
+                            {
+                                btnChipsetDownload.Text = "Tải Chipset " + chipsetVendor;
+                                btnChipsetDownload.Visible = true;
+                            }
+                            if (btnChipsetDriver != null && !string.IsNullOrEmpty(chipsetVendor))
+                            {
+                                btnChipsetDriver.Text = "Tải Chipset (" + chipsetVendor + ")";
+                                btnChipsetDriver.Visible = true;
+                            }
                         });
                     }
 
@@ -2688,7 +2933,16 @@ namespace DriverChecker
                                 lblAppStatus.Text = string.Format("Đang tải {0} từ máy chủ chính thức...", app.Name);
                             });
 
-                            string tempFile = Path.Combine(Path.GetTempPath(), "MBSetup-1.1.exe");
+                            string fileName = "setup_" + Math.Abs(app.Name.GetHashCode()) + ".exe";
+                            try
+                            {
+                                string seg = Path.GetFileName(new Uri(app.DownloadUrl).LocalPath);
+                                if (!string.IsNullOrEmpty(seg) && seg.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                                    fileName = seg;
+                            }
+                            catch { }
+
+                            string tempFile = Path.Combine(Path.GetTempPath(), fileName);
                             try
                             {
                                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
@@ -2711,8 +2965,14 @@ namespace DriverChecker
 
                             try
                             {
+                                string args = "/silent /norestart";
+                                if (app.PackageId.IndexOf("vcredist", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    args = "/ai /gm2";
+                                else if (app.PackageId.IndexOf("directx", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    args = "/Q";
+
                                 var psi = new ProcessStartInfo(tempFile);
-                                psi.Arguments = "/silent /norestart";
+                                psi.Arguments = args;
                                 psi.UseShellExecute = true;
                                 var p = Process.Start(psi);
                                 if (p != null)
